@@ -26,11 +26,7 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    
-    // РАСШИРЯЕМ ПОЛЕ ДО 50 СИМВОЛОВ (исправляет ошибку value too long)
     await pool.query(`ALTER TABLE bookings ALTER COLUMN seat_key TYPE VARCHAR(50);`).catch(()=>{});
-    
-    // На всякий случай убираем старые ограничения
     await pool.query(`ALTER TABLE bookings ALTER COLUMN fullname DROP NOT NULL;`).catch(()=>{});
     await pool.query(`ALTER TABLE bookings ALTER COLUMN phone DROP NOT NULL;`).catch(()=>{});
     await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'booked';`).catch(()=>{});
@@ -41,8 +37,7 @@ async function initDB() {
         value JSONB
       )
     `);
-    
-    console.log('База данных успешно обновлена и готова к работе');
+    console.log('База данных готова к работе');
   } catch (err) {
     console.error('Ошибка инициализации БД:', err);
   }
@@ -166,8 +161,27 @@ app.post('/api/admin/toggle-block', async (req, res) => {
       await pool.query("INSERT INTO bookings (seat_key, fullname, phone, status) VALUES ($1, 'Админ', 'Заблокировано', 'blocked')", [seat]);
       return res.json({ status: 'blocked' });
     }
-  } catch (err) { 
-    res.status(500).json({ error: 'Ошибка БД: ' + err.message });
+  } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
+});
+
+// НОВЫЙ ЭНДПОИНТ ДЛЯ МАССОВОЙ БЛОКИРОВКИ
+app.post('/api/admin/bulk-block', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
+  const { seats, action } = req.body;
+  try {
+    if (action === 'block') {
+      for (const seat of seats) {
+        const { rows } = await pool.query('SELECT status FROM bookings WHERE seat_key = $1', [seat]);
+        if (rows.length === 0) {
+          await pool.query("INSERT INTO bookings (seat_key, fullname, phone, status) VALUES ($1, 'Админ', 'Заблокировано', 'blocked')", [seat]);
+        }
+      }
+    } else if (action === 'unblock') {
+      await pool.query("DELETE FROM bookings WHERE seat_key = ANY($1) AND status = 'blocked'", [seats]);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
