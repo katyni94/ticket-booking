@@ -18,10 +18,22 @@
     color:var(--text); display:flex; flex-direction:column; align-items:center;
   }
   h1{font-size:22px; margin:0 0 4px; font-weight:600; text-align:center}
-  .sub{color:var(--muted); font-size:13px; margin-bottom:18px; text-align:center}
+  .sub{color:var(--muted); font-size:13px; margin-bottom:15px; text-align:center}
+
+  /* Переключатель событий */
+  .event-switch {
+    display: flex; gap: 10px; margin-bottom: 20px; background: #171d27; padding: 5px; border-radius: 12px;
+  }
+  .event-switch button {
+    background: transparent; color: var(--muted); border: none; padding: 10px 20px; border-radius: 8px; 
+    font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 14px;
+  }
+  .event-switch button.active {
+    background: var(--accent); color: #fff;
+  }
   
   .stage{
-    width:min(400px,80%); height:40px; border-radius:0 0 50% 50%;
+    width:min(500px,80%); height:40px; border-radius:0 0 50% 50%;
     background:#2a3446; display:flex; align-items:center; justify-content:center;
     color:#8b97a8; font-weight:600; letter-spacing:2px; text-transform:uppercase;
     margin-bottom:30px; border-top:4px solid #1f2735;
@@ -29,33 +41,37 @@
 
   .zone-title{font-size:11px; color:var(--muted); text-transform:uppercase; margin:10px 0 5px; font-weight:600; text-align:center}
   
-  .hall-wrap{width:100%; max-width:1200px; overflow-x:auto; padding-bottom:20px; display:flex; justify-content:center;}
+  .hall-wrap{width:100%; max-width:1400px; overflow-x:auto; padding-bottom:20px; display:flex; flex-direction:column; align-items:center;}
   
-  /* Раскладка */
-  .hall-layout { display: flex; justify-content: center; gap: 30px; align-items: flex-start; }
+  /* Раскладка: Левая колонка, Центр, Правая колонка */
+  .hall-layout { display: flex; justify-content: center; gap: 20px; align-items: flex-start; }
   
-  /* Вертикальные балконы */
+  /* Балконы (горизонтальные ряды) */
   .balc-col { display: flex; flex-direction: column; gap: 4px; }
-  .balc-row { display: flex; gap: 4px; justify-content: flex-end; }
-  .balc-row.right-side { justify-content: flex-start; }
+  .balc-row { display: flex; gap: 4px; }
 
   /* Партер и Центр */
   .center-col { display: flex; flex-direction: column; align-items: center; gap: 15px; }
   .parterre-grid { display: flex; flex-direction: column; gap: 4px; align-items: center; }
   .parterre-row { display: flex; gap: 4px; }
+  
+  /* Разделитель (проход) в партере */
+  .aisle { width: 30px; }
 
   /* Места */
   .seat{
-    width: 22px; height: 22px; border:0; border-radius:4px 4px 1px 1px;
+    width: 20px; height: 20px; border:0; border-radius:4px 4px 1px 1px;
     background:var(--seat-default); color:#fff; font-size:9px; cursor:pointer;
-    transition:transform .1s, opacity .1s; padding: 0; flex-shrink: 0;
+    transition:transform .1s, opacity .2s; padding: 0; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center; text-shadow: 1px 1px 1px #000;
   }
   .seat:hover:not(.booked):not(.blocked):not(.disabled){transform:scale(1.15); z-index: 10;}
   .seat.selected{background:var(--selected) !important; color:#1a1206; box-shadow:0 0 0 2px rgba(245,158,11,.6); text-shadow: none;}
   .seat.booked{background:var(--booked) !important; color:transparent; cursor:not-allowed;}
   .seat.blocked{background:var(--blocked) !important; color:transparent; cursor:not-allowed; border:1px solid #333;}
-  .seat.disabled{opacity: 0.2; cursor: not-allowed; filter: grayscale(100%);}
+  
+  /* Неактивная половина зала */
+  .seat.disabled{opacity: 0.15; cursor: not-allowed; filter: grayscale(100%);}
 
   /* Легенда */
   .legend{display:flex; gap:15px; flex-wrap:wrap; justify-content:center; margin:15px 0; font-size:12px; color:var(--muted)}
@@ -94,16 +110,22 @@
 <h1>Концертный зал</h1>
 <div class="sub">25 ноября в 19:00</div>
 
+<!-- Переключатель событий -->
+<div class="event-switch">
+  <button id="btn-event-left" class="active" onclick="switchEvent('left')">Живи ярче (Левая часть)</button>
+  <button id="btn-event-right" onclick="switchEvent('right')">Танцы без возраста (Правая часть)</button>
+</div>
+
 <div class="stage">СЦЕНА</div>
 
 <div class="hall-wrap">
   <div class="hall-layout">
-    <!-- ЛЕВЫЕ БАЛКОНЫ -->
-    <div class="center-col">
+    <!-- ЛЕВАЯ КОЛОНКА (Балконы Б и А) -->
+    <div class="balc-col">
       <div class="zone-title">Левый балкон Б</div>
-      <div class="balc-col" id="left-balc-b"></div>
+      <div id="left-balc-b"></div>
       <div class="zone-title" style="margin-top:15px">Левый балкон А</div>
-      <div class="balc-col" id="left-balc-a"></div>
+      <div id="left-balc-a"></div>
     </div>
 
     <!-- ЦЕНТР (ПАРТЕР И ЦБ) -->
@@ -115,12 +137,12 @@
       <div class="parterre-grid" id="central-balc"></div>
     </div>
 
-    <!-- ПРАВЫЕ БАЛКОНЫ -->
-    <div class="center-col">
+    <!-- ПРАВАЯ КОЛОНКА (Балконы Б и А) -->
+    <div class="balc-col">
       <div class="zone-title">Правый балкон Б</div>
-      <div class="balc-col" id="right-balc-b"></div>
+      <div id="right-balc-b"></div>
       <div class="zone-title" style="margin-top:15px">Правый балкон А</div>
-      <div class="balc-col" id="right-balc-a"></div>
+      <div id="right-balc-a"></div>
     </div>
   </div>
 </div>
@@ -149,7 +171,7 @@
   <button class="btn admin" id="adminBtn">Войти как Админ</button>
 </div>
 
-<!-- МОДАЛКА БРОНИРОВАНИЯ -->
+<!-- МОДАЛКИ -->
 <div class="modal" id="modal" hidden>
   <div class="modal-card">
     <h2>Подтверждение брони</h2>
@@ -166,7 +188,6 @@
   </div>
 </div>
 
-<!-- МОДАЛКА ОТМЕНЫ -->
 <div class="modal" id="cancelModal" hidden>
   <div class="modal-card">
     <h2>Отмена брони</h2>
@@ -187,14 +208,14 @@
 <script>
 const MAX_SEATS = 4;
 const POLL_MS = 5000;
-const ADMIN_PASSWORD = "admin123"; // Должен совпадать с server.js
+const ADMIN_PASSWORD = "admin123";
+let currentEvent = 'left'; // 'left' или 'right'
 
 let bookedSet = new Set();
 let selected  = new Set();
 let cancelSeats = new Set();
 let isAdminMode = false;
 
-// СХЕМА ЗАЛА
 const hallData = {
   leftBalcB:  [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2],
   leftBalcA:  [16, 15, 14, 13, 12, 11, 10, 8],
@@ -205,8 +226,8 @@ const hallData = {
 };
 
 function getPriceAndColor(zone, row) {
-  let price = 600, color = '#60a5fa'; // По умолчанию синий
-  if (zone === 'parterre') {
+  let price = 600, color = '#60a5fa'; 
+  if (zone.includes('parterre')) {
     if (row === 1) { price = 1500; color = '#ef4444'; }
     else if (row === 2) { price = 1400; color = '#fca5a5'; }
     else if (row === 3) { price = 1300; color = '#f97316'; }
@@ -217,16 +238,20 @@ function getPriceAndColor(zone, row) {
   return { price, color };
 }
 
-function createSeat(key, num, title, color, price, isBookingEnabled) {
+function createSeat(key, num, title, color, price, side) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'seat';
   btn.dataset.key = key;
+  btn.dataset.side = side; // 'left' или 'right'
   btn.textContent = num;
   btn.title = `${title} (${price} ₽)`;
   btn.style.background = color;
 
-  if (!isBookingEnabled) btn.classList.add('disabled');
+  // Отключаем половину, которая не выбрана
+  if (side && side !== currentEvent) {
+    btn.classList.add('disabled');
+  }
   
   if (bookedSet.has(key)) {
     if (bookedSet.has(key + '_blocked')) btn.classList.add('blocked');
@@ -237,7 +262,14 @@ function createSeat(key, num, title, color, price, isBookingEnabled) {
   return btn;
 }
 
-function renderRows(containerId, dataArray, prefix, zoneName, isVertical = false, bookingEnabled = true) {
+function switchEvent(event) {
+  currentEvent = event;
+  document.getElementById('btn-event-left').classList.toggle('active', event === 'left');
+  document.getElementById('btn-event-right').classList.toggle('active', event === 'right');
+  render();
+}
+
+function renderRows(containerId, dataArray, prefix, zoneName, side) {
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = '';
@@ -245,29 +277,44 @@ function renderRows(containerId, dataArray, prefix, zoneName, isVertical = false
   dataArray.forEach((seatCount, index) => {
     const rowNum = index + 1;
     const rowDiv = document.createElement('div');
-    rowDiv.className = isVertical ? 'balc-row' : 'parterre-row';
-    if (isVertical && prefix.includes('right')) rowDiv.classList.add('right-side');
+    rowDiv.className = 'balc-row';
 
     const { price, color } = getPriceAndColor(prefix, rowNum);
 
-    for (let i = 0; i < seatCount; i++) {
-      let seatNum = (prefix.includes('parterre') || prefix.includes('left')) ? (seatCount - i) : (i + 1);
-      rowDiv.appendChild(createSeat(`${prefix}-${rowNum}-${seatNum}`, seatNum, `${zoneName} Ряд ${rowNum} Место ${seatNum}`, color, price, bookingEnabled));
+    if (prefix === 'parterre') {
+        // Для партера делаем разделитель (проход) посередине
+        const leftHalf = Math.ceil(seatCount / 2);
+        const rightHalf = Math.floor(seatCount / 2);
+        
+        for (let i = 0; i < leftHalf; i++) {
+            let seatNum = leftHalf - i;
+            rowDiv.appendChild(createSeat(`parterre-left-${rowNum}-${seatNum}`, seatNum, `${zoneName} Левая сторона Ряд ${rowNum} Место ${seatNum}`, color, price, 'left'));
+        }
+        // Проход
+        const aisle = document.createElement('div'); aisle.className = 'aisle'; rowDiv.appendChild(aisle);
+        
+        for (let i = 0; i < rightHalf; i++) {
+            let seatNum = i + 1;
+            rowDiv.appendChild(createSeat(`parterre-right-${rowNum}-${seatNum}`, seatNum, `${zoneName} Правая сторона Ряд ${rowNum} Место ${seatNum}`, color, price, 'right'));
+        }
+    } else {
+        // Для балконов
+        for (let i = 0; i < seatCount; i++) {
+            let seatNum = prefix.includes('left') ? (seatCount - i) : (i + 1);
+            rowDiv.appendChild(createSeat(`${prefix}-${rowNum}-${seatNum}`, seatNum, `${zoneName} Ряд ${rowNum} Место ${seatNum}`, color, price, side));
+        }
     }
     container.appendChild(rowDiv);
   });
 }
 
 function render() {
-  // Партер и ЦБ отключены для бронирования (Запрос: с колонки C по AA)
-  renderRows('parterre', hallData.parterre, 'parterre', 'Партер', false, false);
-  renderRows('central-balc', hallData.centralBalc, 'central', 'Центральный балкон', false, false);
-  
-  // Балконы включены
-  renderRows('left-balc-b', hallData.leftBalcB, 'left-balc-b', 'Левый балкон Б', true, true);
-  renderRows('left-balc-a', hallData.leftBalcA, 'left-balc-a', 'Левый балкон А', true, true);
-  renderRows('right-balc-b', hallData.rightBalcB, 'right-balc-b', 'Правый балкон Б', true, true);
-  renderRows('right-balc-a', hallData.rightBalcA, 'right-balc-a', 'Правый балкон А', true, true);
+  renderRows('left-balc-b', hallData.leftBalcB, 'left-balc-b', 'Левый балкон Б', 'left');
+  renderRows('left-balc-a', hallData.leftBalcA, 'left-balc-a', 'Левый балкон А', 'left');
+  renderRows('parterre', hallData.parterre, 'parterre', 'Партер', null); // null - значит и левая и правая
+  renderRows('central-balc', hallData.centralBalc, 'central', 'Центральный балкон', 'left'); // ЦБ отнесем к левой части
+  renderRows('right-balc-b', hallData.rightBalcB, 'right-balc-b', 'Правый балкон Б', 'right');
+  renderRows('right-balc-a', hallData.rightBalcA, 'right-balc-a', 'Правый балкон А', 'right');
   
   updateBar();
 }
@@ -280,46 +327,36 @@ function updateBar(){
 async function loadBookings(){
   try {
     const res = await fetch('/api/bookings', { cache: 'no-store' });
-    if (!res.ok) throw new Error();
     const data = await res.json();
-    
     bookedSet.clear();
     if (Array.isArray(data)) {
       data.forEach(item => {
-        if (typeof item === 'string') {
-          bookedSet.add(item);
-        } else {
+        if (typeof item === 'string') bookedSet.add(item);
+        else {
           bookedSet.add(item.seat_key);
           if (item.status === 'blocked') bookedSet.add(item.seat_key + '_blocked');
         }
       });
     }
-    
     for (const k of [...selected]) if (bookedSet.has(k)) selected.delete(k);
     render();
-  } catch (e) {
-    console.error("Ошибка обновления, но зал отрисован");
-    render(); // Все равно рисуем зал, даже если база не ответила
-  }
+  } catch (e) { render(); }
 }
 
-// КЛИКИ
 document.body.addEventListener('click', async e => {
   const btn = e.target.closest('.seat');
   if (!btn || btn.classList.contains('booked') || btn.classList.contains('disabled')) return;
   const key = btn.dataset.key;
   
-  // Режим АДМИНА
   if (isAdminMode) {
     if (btn.classList.contains('blocked')) {
-      if(confirm('Разблокировать это место?')) await toggleBlock(key);
+      if(confirm('Разблокировать?')) await toggleBlock(key);
     } else {
-      if(confirm('ЗАБЛОКИРОВАТЬ это место для продажи?')) await toggleBlock(key);
+      if(confirm('ЗАБЛОКИРОВАТЬ место?')) await toggleBlock(key);
     }
     return;
   }
 
-  // Обычный режим
   if (selected.has(key)) {
     selected.delete(key);
     btn.classList.remove('selected');
@@ -349,17 +386,16 @@ document.getElementById('adminBtn').addEventListener('click', () => {
     document.getElementById('adminBtn').textContent = 'Войти как Админ';
     showToast('Режим админа выключен');
   } else {
-    const pass = prompt('Введите пароль администратора:');
+    const pass = prompt('Введите пароль:');
     if (pass === ADMIN_PASSWORD) {
       isAdminMode = true;
       document.getElementById('adminBtn').classList.add('active');
       document.getElementById('adminBtn').textContent = 'Выйти из Админа';
-      showToast('Кликайте по местам, чтобы блокировать');
+      showToast('Кликайте по местам для блокировки');
     } else if (pass !== null) alert('Неверный пароль');
   }
 });
 
-// БРОНИРОВАНИЕ И ОТМЕНА
 document.getElementById('bookBtn').addEventListener('click', () => {
   if (!selected.size) return;
   document.getElementById('modalSeats').textContent = seatsText();
@@ -373,8 +409,19 @@ function seatsText(){
   const groups = {};
   for (const key of selected){
     let parts = key.split('-');
-    let zone = parts[0] === 'parterre' ? 'Партер' : (parts[0].includes('central') ? 'Центр. балкон' : 'Балкон');
+    let zone = 'Балкон';
     let r = parts[parts.length-2]; let c = parts[parts.length-1];
+    
+    if (parts[0] === 'parterre') {
+        zone = parts[1] === 'left' ? 'Партер (Левая сторона)' : 'Партер (Правая сторона)';
+        r = parts[2]; c = parts[3];
+    } else if (parts.includes('central')) {
+        zone = 'Центральный балкон';
+    } else if (parts.includes('balc')) {
+        zone = parts[0] === 'left' ? 'Левый балкон' : 'Правый балкон';
+        r = parts[2]; c = parts[3];
+    }
+
     if(!groups[`${zone} Ряд ${r}`]) groups[`${zone} Ряд ${r}`] = [];
     groups[`${zone} Ряд ${r}`].push(Number(c));
   }
@@ -452,9 +499,8 @@ async function cancelBookings() {
 let toastTimer;
 function showToast(msg){ document.getElementById('toast').textContent=msg; document.getElementById('toast').classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>document.getElementById('toast').classList.remove('show'),2500); }
 
-// Инициализация
-render(); // Сначала рисуем зал
-loadBookings(); // Потом загружаем статусы
+render();
+loadBookings();
 setInterval(loadBookings, POLL_MS);
 </script>
 </body>
