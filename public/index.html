@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Бронирование мест</title>
+<style>
+  :root{
+    --bg:#0f1319; --panel:#171d27; --seat:#2a3342; --seat-hover:#3a475c;
+    --accent:#3b82f6; --selected:#f59e0b; --booked:#5a2a36;
+    --text:#e6ebf2; --muted:#8b97a8;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; padding:28px 16px 100px;
+    font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    background:radial-gradient(1200px 500px at 50% -10%,#1b2434,#0f1319);
+    color:var(--text); display:flex; flex-direction:column; align-items:center;
+  }
+  h1{font-size:22px; margin:0 0 4px; font-weight:600}
+  .sub{color:var(--muted); font-size:13px; margin-bottom:18px}
+  .status{font-size:12px; color:var(--muted); margin-bottom:18px; min-height:16px}
+  .status.err{color:#f87171}
+
+  .screen{
+    width:min(680px,90%); height:8px; border-radius:50%; margin:0 auto 26px;
+    background:#60a5fa; box-shadow:0 0 45px 10px rgba(96,165,250,.5);
+  }
+  .hall-wrap{width:100%; max-width:800px; overflow-x:auto; padding-bottom:6px}
+  .hall{
+    display:grid; grid-template-columns:26px repeat(12,1fr) 26px;
+    gap:8px; min-width:620px;
+  }
+  .row-num{display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--muted)}
+  .seat{
+    aspect-ratio:1/1; border:0; border-radius:9px 9px 3px 3px;
+    background:var(--seat); color:#9fb0c9; font-size:11px; cursor:pointer;
+    transition:transform .15s, background .15s, box-shadow .15s;
+  }
+  .seat:hover:not(.booked):not(.selected){background:var(--seat-hover); transform:translateY(-2px)}
+  .seat.selected{background:var(--selected); color:#1a1206; box-shadow:0 0 0 2px rgba(245,158,11,.35)}
+  .seat.booked{background:var(--booked); color:transparent; cursor:not-allowed; opacity:.6}
+
+  .legend{display:flex; gap:18px; flex-wrap:wrap; justify-content:center; margin:22px 0 10px; font-size:13px; color:var(--muted)}
+  .legend span{display:flex; align-items:center; gap:7px}
+  .dot{width:14px; height:14px; border-radius:4px 4px 2px 2px; display:inline-block}
+
+  .bar{
+    position:fixed; left:0; right:0; bottom:0; background:rgba(23,29,39,.96);
+    border-top:1px solid #222b39; padding:12px 16px;
+    display:flex; align-items:center; justify-content:center; gap:20px; flex-wrap:wrap;
+    backdrop-filter:blur(8px);
+  }
+  .bar b{color:#fff}
+  .btn{
+    border:0; border-radius:10px; padding:11px 20px; font-size:14px; font-weight:600;
+    cursor:pointer; transition:.15s; font-family:inherit;
+  }
+  .btn.primary{background:var(--accent); color:#fff}
+  .btn.primary:hover:not(:disabled){background:#2f6fd6}
+  .btn:disabled{opacity:.4; cursor:not-allowed}
+  .btn.ghost{background:#242d3b; color:var(--text)}
+  .btn.ghost:hover{background:#2e3a4c}
+
+  .modal{position:fixed; inset:0; z-index:50; background:rgba(5,8,12,.72);
+         display:flex; align-items:center; justify-content:center; padding:16px}
+  .modal[hidden]{display:none}
+  .modal-card{background:var(--panel); border:1px solid #232c3a; border-radius:16px;
+              padding:24px; width:100%; max-width:390px}
+  .modal-card h2{margin:0 0 6px; font-size:18px}
+  .modal-seats{color:var(--muted); font-size:13px; white-space:pre-line; margin:0 0 18px; line-height:1.6}
+  .hint{color:var(--muted); font-size:12px; margin:-8px 0 14px; line-height:1.5}
+  label{display:block; font-size:13px; color:var(--muted); margin-bottom:14px}
+  input{
+    width:100%; margin-top:6px; padding:11px 13px; border-radius:10px;
+    border:1px solid #2a3446; background:#111721; color:var(--text); font-size:14px;
+    font-family:inherit; outline:none; transition:.15s;
+  }
+  input:focus{border-color:var(--accent)}
+  .modal-actions{display:flex; gap:10px; margin-top:6px}
+  .modal-actions .btn{flex:1}
+  .error{color:#f87171; font-size:13px; margin:10px 0 0; min-height:18px}
+
+  .toast{
+    position:fixed; left:50%; bottom:90px; transform:translateX(-50%) translateY(16px);
+    background:#1a8a4d; color:#fff; padding:12px 20px; border-radius:10px;
+    font-size:14px; opacity:0; pointer-events:none; transition:.25s; z-index:60;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<h1>Выбор места в зале</h1>
+<div class="sub">Нажмите на свободные места, затем заполните данные</div>
+<div class="status" id="status">Загрузка…</div>
+
+<div class="screen"></div>
+<div class="hall-wrap"><div class="hall" id="hall"></div></div>
+
+<div class="legend">
+  <span><i class="dot" style="background:#2a3342"></i>свободно</span>
+  <span><i class="dot" style="background:#f59e0b"></i>выбрано</span>
+  <span><i class="dot" style="background:#5a2a36"></i>занято</span>
+</div>
+
+<div class="bar">
+  <div>Выбрано: <b id="count">0</b></div>
+  <div>Сумма: <b id="total">0 ₽</b></div>
+  <button class="btn primary" id="bookBtn" disabled>Забронировать</button>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-card">
+    <h2>Подтверждение брони</h2>
+    <p class="modal-seats" id="modalSeats"></p>
+    <p class="hint">На один номер телефона — не более 4 мест (учитываются все прошлые брони).</p>
+    <form id="bookingForm" novalidate>
+      <label>Фамилия
+        <input id="surname" type="text" placeholder="Иванов" maxlength="40" autocomplete="family-name">
+      </label>
+      <label>Номер телефона
+        <input id="phone" type="tel" placeholder="+7 999 123-45-67" autocomplete="tel">
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="cancelBtn">Отмена</button>
+        <button type="submit" class="btn primary" id="submitBtn">Забронировать</button>
+      </div>
+      <p class="error" id="error"></p>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= НАСТРОЙКИ ЗАЛА ================= */
+const ROWS = 8;
+const COLS = 12;
+const PRICE = 500;
+const MAX_SEATS = 4; // Лимит на сессию
+const POLL_MS = 5000; // Обновление каждые 5 сек
+
+/* ================= СОСТОЯНИЕ ================= */
+let bookedSet = new Set();
+let selected  = new Set();
+
+const hallEl     = document.getElementById('hall');
+const countEl    = document.getElementById('count');
+const totalEl    = document.getElementById('total');
+const bookBtn    = document.getElementById('bookBtn');
+const modal      = document.getElementById('modal');
+const modalSeats = document.getElementById('modalSeats');
+const form       = document.getElementById('bookingForm');
+const errorEl    = document.getElementById('error');
+const toastEl    = document.getElementById('toast');
+const statusEl   = document.getElementById('status');
+
+/* ================= РЕНДЕР ================= */
+function render(){
+  hallEl.innerHTML = '';
+  for (let r = 1; r <= ROWS; r++){
+    hallEl.appendChild(rowNum(r));
+    for (let c = 1; c <= COLS; c++){
+      const key = `${r}-${c}`;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'seat';
+      btn.dataset.key = key;
+      btn.textContent = c;
+      btn.title = `Ряд ${r}, место ${c}`;
+
+      if (bookedSet.has(key)) {
+        btn.classList.add('booked');
+        btn.disabled = true;
+        btn.title += ' — занято';
+      }
+      if (selected.has(key)) btn.classList.add('selected');
+      hallEl.appendChild(btn);
+    }
+    hallEl.appendChild(rowNum(r));
+  }
+  updateBar();
+}
+function rowNum(n){
+  const d = document.createElement('div');
+  d.className = 'row-num'; d.textContent = n; return d;
+}
+function updateBar(){
+  countEl.textContent = selected.size;
+  totalEl.textContent = (selected.size * PRICE).toLocaleString('ru-RU') + ' ₽';
+  bookBtn.disabled = selected.size === 0;
+}
+
+/* ================= ЗАГРУЗКА БРОНЕЙ ================= */
+async function loadBookings(){
+  try {
+    const res = await fetch('/api/bookings', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const keys = await res.json();
+    bookedSet = new Set(keys);
+
+    // Если кто-то занял место, пока мы его выбрали — снимаем выбор
+    for (const k of [...selected]) if (bookedSet.has(k)) selected.delete(k);
+
+    statusEl.textContent = '';
+    statusEl.classList.remove('err');
+    render();
+  } catch (e) {
+    statusEl.textContent = 'Не удаётся подключиться к серверу…';
+    statusEl.classList.add('err');
+  }
+}
+
+/* ================= КЛИК ПО МЕСТУ ================= */
+hallEl.addEventListener('click', e => {
+  const btn = e.target.closest('.seat');
+  if (!btn || btn.classList.contains('booked')) return;
+  const key = btn.dataset.key;
+
+  if (selected.has(key)) {
+    selected.delete(key);
+    btn.classList.remove('selected');
+  } else {
+    if (selected.size >= MAX_SEATS) {
+      showToast(`За раз можно выбрать не больше ${MAX_SEATS} мест`);
+      return;
+    }
+    selected.add(key);
+    btn.classList.add('selected');
+  }
+  updateBar();
+});
+
+/* ================= МОДАЛКА ================= */
+bookBtn.addEventListener('click', () => {
+  if (!selected.size) return;
+  modalSeats.textContent = seatsText();
+  errorEl.textContent = '';
+  form.reset();
+  modal.hidden = false;
+  document.getElementById('surname').focus();
+});
+document.getElementById('cancelBtn').onclick = () => modal.hidden = true;
+modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+
+function seatsText(){
+  const byRow = {};
+  for (const key of selected){
+    const [r, c] = key.split('-');
+    (byRow[r] = byRow[r] || []).push(Number(c));
+  }
+  return Object.keys(byRow).sort((a,b)=>a-b)
+    .map(r => `Ряд ${r}: место ${byRow[r].sort((a,b)=>a-b).join(', ')}`).join('\n');
+}
+
+/* ================= ПРОВЕРКА ЛИМИТА ================= */
+document.getElementById('phone').addEventListener('blur', async () => {
+  const phone = document.getElementById('phone').value.trim();
+  if (phone.replace(/\D/g, '').length < 10) return;
+  
+  try {
+    const res = await fetch('/api/limit?phone=' + encodeURIComponent(phone));
+    if (!res.ok) return;
+    const { used, left } = await res.json();
+
+    if (left === 0) {
+      errorEl.textContent = `На этот номер уже забронировано ${used} из ${MAX_SEATS} мест — добавить нельзя.`;
+    } else if (left < selected.size) {
+      errorEl.textContent = `На этот номер осталось ${left} из ${MAX_SEATS} мест, а выбрано ${selected.size}. Уменьшите выбор.`;
+    } else {
+      errorEl.textContent = '';
+    }
+  } catch (e) {}
+});
+
+/* ================= ОТПРАВКА ================= */
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  errorEl.textContent = '';
+
+  const surname = document.getElementById('surname').value.trim();
+  const phone   = document.getElementById('phone').value.trim();
+  const digits  = phone.replace(/\D/g, '');
+
+  if (surname.length < 2) { errorEl.textContent = 'Введите фамилию'; return; }
+  if (digits.length < 10 || digits.length > 15) { errorEl.textContent = 'Введите корректный телефон'; return; }
+
+  const submitBtn = document.getElementById('submitBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Бронируем...';
+
+  try {
+    const res = await fetch('/api/bookings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seats: [...selected], surname, phone })
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      errorEl.textContent = data.error || 'Не удалось забронировать';
+      if (res.status === 409) {
+        await loadBookings(); // Обновляем места, если кто-то успел раньше
+      }
+      return;
+    }
+
+    const count = selected.size;
+    selected.clear();
+    bookedSet = new Set(data.booked);
+    modal.hidden = true;
+    render();
+    showToast(`Готово! Забронировано: ${count}. Остаток на номер: ${data.left} из ${MAX_SEATS}`);
+  } catch (err) {
+    errorEl.textContent = 'Ошибка сети. Попробуйте ещё раз.';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Забронировать';
+  }
+});
+
+/* ================= ТОСТ ================= */
+let toastTimer;
+function showToast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2600);
+}
+
+/* ================= СТАРТ ================= */
+loadBookings();
+setInterval(loadBookings, POLL_MS);
+</script>
+</body>
+</html>
