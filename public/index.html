@@ -66,6 +66,13 @@
   .btn.admin{background:#7c3aed; color:#fff; margin-left: 15px;}
   .btn.admin.active{background:#ef4444; box-shadow: 0 0 10px #ef4444;}
 
+  /* Стили для селектора админа */
+  #adminModeSelect {
+    display: none; padding: 10px 14px; border-radius: 8px; border: none;
+    background: #2a3446; color: #fff; font-weight: bold; font-size: 13px; cursor: pointer; outline: none;
+  }
+  #adminModeSelect.mode-book { background: #3b82f6; }
+
   /* Модалки */
   .modal{position:fixed; inset:0; z-index:200; background:rgba(5,8,12,.8); display:flex; align-items:center; justify-content:center; padding:16px}
   .modal[hidden]{display:none}
@@ -138,7 +145,13 @@
   <div>Выбрано: <b id="count">0</b></div>
   <button class="btn ghost" id="cancelBtnOpen">Отменить бронь</button>
   <button class="btn primary" id="bookBtn" disabled>Забронировать</button>
+  
   <button class="btn admin" id="adminBtn">Войти как Админ</button>
+  <select id="adminModeSelect" class="mode-block">
+    <option value="block">🛠 Режим: Блокировка</option>
+    <option value="book">🎟 Режим: Бронирование</option>
+  </select>
+  
   <button class="btn primary" id="settingsBtn" style="display:none; background:#f59e0b;" onclick="openSettings()">⚙ Настройки цен</button>
 </div>
 
@@ -232,6 +245,7 @@ let bookedSet = new Set();
 let selected  = new Set();
 let cancelSeats = new Set();
 let isAdminMode = false;
+let adminActionMode = 'block'; // 'block' или 'book'
 let priceSettings = {};
 
 const parterreStrings = [
@@ -336,10 +350,9 @@ function createSeat(key, num, title, color, price, side, zoneName, rowNum) {
   if (bookedSet.has(key)) {
     if (bookedSet.has(key + '_blocked')) {
       btn.classList.add('blocked');
-      // Не делаем disabled, чтобы админ мог кликнуть и разблокировать
     } else {
       btn.classList.add('booked');
-      btn.disabled = true; // Забронированные (проданные) места не кликаются
+      btn.disabled = true;
     }
   }
   if (selected.has(key)) btn.classList.add('selected');
@@ -479,13 +492,15 @@ document.body.addEventListener('mouseout', e => {
   if (e.target.closest('.seat')) tooltip.style.display = 'none';
 });
 
+// ОБРАБОТКА КЛИКОВ С УЧЕТОМ РЕЖИМА АДМИНА
 document.body.addEventListener('click', async e => {
   const btn = e.target.closest('.seat');
   if (!btn) return;
   
   const key = btn.dataset.key;
   
-  if (isAdminMode) {
+  // Если это админ в режиме БЛОКИРОВКИ
+  if (isAdminMode && adminActionMode === 'block') {
     if (btn.classList.contains('booked')) {
        alert('Это место уже куплено клиентом, его нельзя разблокировать.');
        return;
@@ -498,13 +513,13 @@ document.body.addEventListener('click', async e => {
     return;
   }
 
-  // Для обычных пользователей
+  // Если это обычный пользователь ИЛИ админ в режиме БРОНИРОВАНИЯ
   if (btn.classList.contains('booked') || btn.classList.contains('blocked') || btn.classList.contains('disabled') || btn.disabled) return;
 
   if (selected.has(key)) {
     selected.delete(key); btn.classList.remove('selected');
   } else {
-    if (selected.size >= MAX_SEATS) return showToast(`Не более ${MAX_SEATS} мест`);
+    if (selected.size >= MAX_SEATS) return showToast(`Не более ${MAX_SEATS} мест за раз`);
     selected.add(key); btn.classList.add('selected');
   }
   updateBar();
@@ -524,12 +539,30 @@ async function toggleBlock(seatKey) {
   } catch (e) { alert('Ошибка сети: ' + e.message); }
 }
 
+// ВХОД/ВЫХОД ИЗ АДМИНКИ
+const adminModeSelect = document.getElementById('adminModeSelect');
+
+adminModeSelect.addEventListener('change', (e) => {
+    adminActionMode = e.target.value;
+    if (adminActionMode === 'book') {
+        adminModeSelect.classList.add('mode-book');
+        showToast('Режим: Бронирование. Выбирайте места и бронируйте.');
+    } else {
+        adminModeSelect.classList.remove('mode-book');
+        showToast('Режим: Блокировка. Кликайте по местам для блокировки.');
+    }
+});
+
 document.getElementById('adminBtn').addEventListener('click', () => {
   if (isAdminMode) {
     isAdminMode = false;
     document.getElementById('adminBtn').classList.remove('active');
     document.getElementById('adminBtn').textContent = 'Войти как Админ';
     document.getElementById('settingsBtn').style.display = 'none';
+    adminModeSelect.style.display = 'none';
+    adminActionMode = 'block';
+    adminModeSelect.value = 'block';
+    adminModeSelect.classList.remove('mode-book');
     showToast('Режим админа выключен');
   } else {
     const pass = prompt('Введите пароль:');
@@ -538,7 +571,8 @@ document.getElementById('adminBtn').addEventListener('click', () => {
       document.getElementById('adminBtn').classList.add('active');
       document.getElementById('adminBtn').textContent = 'Выйти из Админа';
       document.getElementById('settingsBtn').style.display = 'inline-block';
-      showToast('Кликайте по местам для блокировки');
+      adminModeSelect.style.display = 'inline-block';
+      showToast('Выберите режим: Блокировка или Бронирование');
     } else if (pass !== null) alert('Неверный пароль');
   }
 });
