@@ -139,7 +139,6 @@
   <button class="btn primary" id="settingsBtn" style="display:none; background:#f59e0b;" onclick="openSettings()">⚙ Настройки цен</button>
 </div>
 
-<!-- МОДАЛКА БРОНИРОВАНИЯ -->
 <div class="modal" id="modal" hidden>
   <div class="modal-card">
     <h2>Подтверждение брони</h2>
@@ -156,7 +155,6 @@
   </div>
 </div>
 
-<!-- МОДАЛКА ОТМЕНЫ -->
 <div class="modal" id="cancelModal" hidden>
   <div class="modal-card">
     <h2>Отмена брони</h2>
@@ -172,7 +170,6 @@
   </div>
 </div>
 
-<!-- МОДАЛКА НАСТРОЕК -->
 <div class="modal" id="settingsModal" hidden>
   <div class="modal-card">
     <h2>Настройки цен (JSON)</h2>
@@ -208,7 +205,6 @@ let cancelSeats = new Set();
 let isAdminMode = false;
 let priceSettings = {};
 
-// --- СХЕМА ЗАЛА ---
 const parterreStrings = [
   "-000000000-000000000000000000000-000000000-", "--00000000-000000000000000000000-00000000-", "--00000000-000000000000000000000-00000000-",
   "--00000000--00000000000000000000-0000000-", "---------------00000000000000000000-----------", "---00000000-0000000000000000000--00000000-",
@@ -222,13 +218,13 @@ const parterreStrings = [
 ];
 const parterreMaxSeats = [39, 37, 37, 35, 20, 35, 31, 33, 32, 30, 30, 29, 29, 29, 29, 28, 28, 27, 19, 19, 19, 30, 20, 17, 19];
 
-// Добавили разрыв в 4 пустоты (----) между 15 и 14 местами
+// ИСПРАВЛЕНО: Разрыв (----) теперь ТОЛЬКО в 5-м ряду
 const centralStrings = [
-  "---------00000000000000----0000000000000----------", // 1 (27 мест)
-  "--------00000000000000----00000000000000----------", // 2 (28 мест)
-  "-------000000000000000----000000000000000---------", // 3 (30 мест)
-  "-------0000000000000000----00000000000000---------", // 4 (31 мест)
-  "-------00000000000000----00000000000000----------"  // 5 (28 мест)
+  "---------000000000000000000000000000----------", // 1 (27 мест)
+  "--------0000000000000000000000000000----------", // 2 (28 мест)
+  "-------00000000000000000000000000000----------", // 3 (30 мест)
+  "-------000000000000000000000000000000----------", // 4 (31 мест)
+  "-------00000000000000----00000000000000----------"  // 5 (28 мест, с разрывом)
 ];
 const centralMaxSeats = [27, 28, 30, 31, 28];
 
@@ -292,7 +288,6 @@ function parseRow(str, maxSeat) {
   return row;
 }
 
-// ЛОГИКА ЦВЕТОВ ИЗ НАСТРОЕК АДМИНА
 function getPriceAndColor(zone, row) {
   let config = priceSettings[zone] || priceSettings['parterre'] || {};
   let rowData = config[row];
@@ -332,9 +327,16 @@ function switchEvent(event) {
 
 function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isParterre = false) {
   const container = document.getElementById(containerId); if (!container) return; container.innerHTML = '';
+  
   gridData.forEach((rowData, rowIndex) => {
     const rowNum = rowIndex + 1;
-    const rowDiv = document.createElement('div'); rowDiv.className = 'row';
+    const rowDiv = document.createElement('div'); 
+    rowDiv.className = 'row';
+    
+    if (prefix === 'parterre' && rowNum === 21) {
+      rowDiv.style.marginBottom = '30px'; // Большой проход между 21 и 22 рядом
+    }
+
     const { price, color } = getPriceAndColor(prefix, rowNum);
 
     rowData.forEach(item => {
@@ -404,7 +406,6 @@ async function loadSettings() {
     const res = await fetch('/api/settings');
     priceSettings = await res.json();
     if (!priceSettings || Object.keys(priceSettings).length === 0) {
-      // Дефолтные настройки, если в базе пусто
       priceSettings = {
         parterre: {
           "1": { "price": 1500, "color": "#ef4444" },
@@ -508,7 +509,6 @@ document.getElementById('adminBtn').addEventListener('click', () => {
   }
 });
 
-// НАСТРОЙКИ ЦЕН
 function openSettings() {
   document.getElementById('settingsJson').value = JSON.stringify(priceSettings, null, 2);
   document.getElementById('settingsError').textContent = '';
@@ -536,7 +536,6 @@ async function saveSettings() {
   }
 }
 
-// БРОНИРОВАНИЕ
 document.getElementById('bookBtn').addEventListener('click', () => {
   if (!selected.size) return;
   document.getElementById('modalSeats').textContent = seatsText();
@@ -607,7 +606,6 @@ async function cancelBookings() {
 let toastTimer;
 function showToast(msg){ document.getElementById('toast').textContent=msg; document.getElementById('toast').classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>document.getElementById('toast').classList.remove('show'),2500); }
 
-// ЗАПУСК
 loadSettings();
 loadBookings();
 setInterval(loadBookings, POLL_MS);
