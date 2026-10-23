@@ -17,6 +17,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 async function initDB() {
   try {
+    // 1. Создаем таблицу, если ее нет
     await pool.query(`
       CREATE TABLE IF NOT EXISTS bookings (
         seat_key VARCHAR(50) PRIMARY KEY,
@@ -27,19 +28,13 @@ async function initDB() {
       )
     `);
     
-    // Снимаем старые ограничения NOT NULL, если они остались с прошлых версий
-    await pool.query(`
-      DO $$ 
-      BEGIN 
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='bookings' AND column_name='fullname' AND is_nullable='NO') THEN
-          ALTER TABLE bookings ALTER COLUMN fullname DROP NOT NULL;
-        END IF;
-        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='bookings' AND column_name='phone' AND is_nullable='NO') THEN
-          ALTER TABLE bookings ALTER COLUMN phone DROP NOT NULL;
-        END IF;
-      END $$;
-    `);
+    // 2. Принудительно применяем миграции (игнорируем ошибки, если они уже применены)
+    await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'booked';`).catch(()=>{});
+    await pool.query(`ALTER TABLE bookings ALTER COLUMN fullname DROP NOT NULL;`).catch(()=>{});
+    await pool.query(`ALTER TABLE bookings ALTER COLUMN phone DROP NOT NULL;`).catch(()=>{});
+    await pool.query(`ALTER TABLE bookings RENAME COLUMN surname TO fullname;`).catch(()=>{}); // На случай старой версии
 
+    // 3. Таблица для настроек цен
     await pool.query(`
       CREATE TABLE IF NOT EXISTS settings (
         key VARCHAR(50) PRIMARY KEY,
@@ -47,9 +42,9 @@ async function initDB() {
       )
     `);
     
-    console.log('База данных готова к работе');
+    console.log('База данных успешно обновлена и готова к работе');
   } catch (err) {
-    console.error('Ошибка подключения к БД:', err);
+    console.error('КРИТИЧЕСКАЯ Ошибка инициализации БД:', err);
   }
 }
 initDB();
@@ -131,7 +126,7 @@ app.post('/api/bookings', async (req, res) => {
     res.json({ ok: true, booked: all, left: MAX_SEATS_PER_PERSON - (used + seats.length) });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Ошибка при бронировании' });
+    res.status(500).json({ error: 'Ошибка при бронировании: ' + err.message });
   } finally { client.release(); }
 });
 
@@ -169,13 +164,13 @@ app.post('/api/admin/toggle-block', async (req, res) => {
         return res.status(400).json({ error: 'Место уже забронировано' });
       }
     } else {
-      // Теперь при блокировке подставляем системные значения, чтобы БД не ругалась
+      // При блокировке подставляем системные значения
       await pool.query("INSERT INTO bookings (seat_key, fullname, phone, status) VALUES ($1, 'Админ', 'Заблокировано', 'blocked')", [seat]);
       return res.json({ status: 'blocked' });
     }
   } catch (err) { 
     console.error(err);
-    res.status(500).json({ error: 'Ошибка БД' }); 
+    res.status(500).json({ error: 'Ошибка БД: ' + err.message }); // Отправляем точный текст ошибки
   }
 });
 
