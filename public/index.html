@@ -33,17 +33,7 @@
   .row { display: flex; gap: 4px; justify-content: center; margin-bottom: 4px; min-height: 20px; }
   
   .aisle { height: 20px; flex-shrink: 0; } 
-  
-  /* Блоки (Диджейка и Барьер) */
-  .dj-booth, .wall-block { 
-    height: 20px; 
-    background: #1f2633; 
-    border: 1px solid #3b465c; 
-    border-radius: 4px; 
-    display: flex; align-items: center; justify-content: center; 
-    font-size: 10px; font-weight: bold; color: #aaa; 
-    flex-shrink: 0;
-  }
+  .dj-booth, .wall-block { height: 20px; background: #1f2633; border: 1px solid #3b465c; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #aaa; flex-shrink: 0; }
   .wall-block { border-style: dashed; background: #151b24; }
 
   .seat{
@@ -229,7 +219,6 @@ const parterreStrings = [
 ];
 const parterreMaxSeats = [39, 37, 37, 35, 20, 35, 31, 33, 32, 30, 30, 29, 29, 29, 29, 28, 28, 27, 19, 19, 19, 30, 20, 17, 19];
 
-// ИСПРАВЛЕНО: Разрыв (----) теперь ТОЛЬКО в 5-м ряду
 const centralStrings = [
   "---------000000000000000000000000000----------", // 1 (27 мест)
   "--------0000000000000000000000000000----------", // 2 (28 мест)
@@ -354,17 +343,14 @@ function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isPart
       if (isParterre) {
         if (item.type === 'aisle') {
           const a = document.createElement('div'); 
-          
-          // ЛОГИКА РАЗРЫВА В ЦЕНТРАЛЬНОМ БАЛКОНЕ
           if (prefix === 'central' && item.width === 4) {
             a.className = 'wall-block'; 
-            a.style.width = `${item.width * 24}px`; // Делаем блок шириной ровно как 4 места
+            a.style.width = `${item.width * 24}px`;
           } else {
             a.className = 'aisle'; 
             a.style.width = `${item.width * (prefix === 'central' ? 12 : 4.5)}px`; 
           }
           rowDiv.appendChild(a);
-
         } else if (item.type === 'seat') {
           const side = getEventSide(prefix, rowNum, item.num);
           rowDiv.appendChild(createSeat(`${prefix}-${rowNum}-${item.num}`, item.num, `${zoneName} Ряд ${rowNum} Место ${item.num}`, color, price, side, zoneName, rowNum));
@@ -482,10 +468,12 @@ document.body.addEventListener('mouseout', e => {
 
 document.body.addEventListener('click', async e => {
   const btn = e.target.closest('.seat');
-  if (!btn || btn.classList.contains('booked') || btn.classList.contains('disabled')) return;
+  if (!btn || btn.classList.contains('booked')) return;
+  
   const key = btn.dataset.key;
   
   if (isAdminMode) {
+    // Убираем проверку на disabled для админа
     if (btn.classList.contains('blocked')) {
       if(confirm('Разблокировать?')) await toggleBlock(key);
     } else {
@@ -493,6 +481,8 @@ document.body.addEventListener('click', async e => {
     }
     return;
   }
+
+  if (btn.classList.contains('disabled')) return; // Only regular users are blocked by disabled
 
   if (selected.has(key)) {
     selected.delete(key); btn.classList.remove('selected');
@@ -508,8 +498,13 @@ async function toggleBlock(seatKey) {
     const res = await fetch(`/api/admin/toggle-block?pass=${ADMIN_PASSWORD}`, {
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ seat: seatKey })
     });
-    if (res.ok) loadBookings(); else { const d = await res.json(); alert(d.error); }
-  } catch (e) { alert('Ошибка сети'); }
+    if (res.ok) {
+      loadBookings();
+    } else {
+      const d = await res.json();
+      alert('Ошибка: ' + (d.error || 'Неизвестная ошибка'));
+    }
+  } catch (e) { alert('Ошибка сети: ' + e.message); }
 }
 
 document.getElementById('adminBtn').addEventListener('click', () => {
@@ -551,7 +546,8 @@ async function saveSettings() {
       render();
       showToast('Настройки сохранены!');
     } else {
-      errorEl.textContent = 'Ошибка сервера';
+      const d = await res.json();
+      errorEl.textContent = 'Ошибка: ' + (d.error || 'Сервер не принял данные');
     }
   } catch (e) {
     errorEl.textContent = 'Неверный формат JSON. Проверьте скобки и кавычки.';
