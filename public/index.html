@@ -66,11 +66,15 @@
   .btn.admin{background:#7c3aed; color:#fff; margin-left: 15px;}
   .btn.admin.active{background:#ef4444; box-shadow: 0 0 10px #ef4444;}
 
+  /* Модалки */
   .modal{position:fixed; inset:0; z-index:200; background:rgba(5,8,12,.8); display:flex; align-items:center; justify-content:center; padding:16px}
   .modal[hidden]{display:none}
-  .modal-card{background:var(--panel); border-radius:16px; padding:24px; width:100%; max-width:390px}
+  .modal-card{background:var(--panel); border-radius:16px; padding:24px; width:100%; max-width:450px;}
+  .modal-card h2{margin-top:0;}
   .modal-seats{color:var(--muted); font-size:13px; white-space:pre-line; margin:0 0 15px; line-height:1.5}
-  input, textarea{width:100%; margin-top:5px; margin-bottom:15px; padding:11px; border-radius:8px; border:1px solid #2a3446; background:#111721; color:var(--text); font-family:monospace;}
+  input[type="text"], input[type="tel"]{width:100%; margin-top:5px; margin-bottom:15px; padding:11px; border-radius:8px; border:1px solid #2a3446; background:#111721; color:var(--text); font-family:monospace;}
+  input[type="number"]{width:70px; padding:6px; border-radius:6px; border:1px solid #2a3446; background:#111721; color:var(--text); margin:0;}
+  input[type="color"]{width:40px; height:30px; padding:0; border:none; border-radius:4px; background:none; cursor:pointer; vertical-align:middle;}
   .error{color:#f87171; font-size:13px; margin-top:10px; min-height:16px;}
   
   .toast{position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#1a8a4d; color:#fff; padding:10px 20px; border-radius:8px; opacity:0; transition:.3s; pointer-events:none; z-index:300;}
@@ -140,6 +144,7 @@
   <button class="btn primary" id="settingsBtn" style="display:none; background:#f59e0b;" onclick="openSettings()">⚙ Настройки цен</button>
 </div>
 
+<!-- МОДАЛКА БРОНИРОВАНИЯ -->
 <div class="modal" id="modal" hidden>
   <div class="modal-card">
     <h2>Подтверждение брони</h2>
@@ -156,6 +161,7 @@
   </div>
 </div>
 
+<!-- МОДАЛКА ОТМЕНЫ -->
 <div class="modal" id="cancelModal" hidden>
   <div class="modal-card">
     <h2>Отмена брони</h2>
@@ -171,14 +177,19 @@
   </div>
 </div>
 
+<!-- МОДАЛКА НАСТРОЕК -->
 <div class="modal" id="settingsModal" hidden>
-  <div class="modal-card">
-    <h2>Настройки цен (JSON)</h2>
-    <p style="font-size:12px; color:var(--muted); margin-bottom:10px;">
-      Формат: "номер_ряда" или "от-до": {"price": цена, "color": "цвет"}.<br>Можно использовать "default" для остальных.
+  <div class="modal-card" style="max-height: 90vh; overflow-y: auto;">
+    <h2>Настройки цен</h2>
+    <p style="font-size:12px; color:var(--muted); margin-bottom:15px;">
+      Укажите цену и цвет для каждого ряда. Остальные места (балконы) используют базовую цену.
     </p>
-    <textarea id="settingsJson" rows="12" style="width:100%; font-family:monospace; font-size:12px;"></textarea>
-    <div style="display:flex; gap:10px; margin-top:10px;">
+    
+    <div id="settingsRowsList" style="padding-right:10px;">
+      <!-- Сюда будут добавляться строки -->
+    </div>
+
+    <div style="display:flex; gap:10px; margin-top:20px; position:sticky; bottom:-24px; background:var(--panel); padding:15px 0;">
       <button type="button" class="btn ghost" style="flex:1" onclick="document.getElementById('settingsModal').hidden = true">Отмена</button>
       <button type="button" class="btn primary" style="flex:1; background:#22c55e;" onclick="saveSettings()">Сохранить</button>
     </div>
@@ -289,16 +300,12 @@ function parseRow(str, maxSeat) {
 }
 
 function getPriceAndColor(zone, row) {
-  let config = priceSettings[zone] || priceSettings['parterre'] || {};
+  let config;
+  if (zone === 'parterre') config = priceSettings['parterre'] || {};
+  else if (zone === 'central') config = priceSettings['central'] || {};
+  else config = { "default": (priceSettings['parterre'] || {})['default'] || { price: 600, color: '#60a5fa' } };
+  
   let rowData = config[row];
-  if (!rowData) {
-    for (let key in config) {
-      if (key.includes('-')) {
-        const [min, max] = key.split('-').map(Number);
-        if (row >= min && row <= max) { rowData = config[key]; break; }
-      }
-    }
-  }
   if (!rowData) rowData = config['default'] || { price: 600, color: '#60a5fa' };
   return { price: rowData.price, color: rowData.color };
 }
@@ -414,17 +421,8 @@ async function loadSettings() {
     const res = await fetch('/api/settings');
     priceSettings = await res.json();
     if (!priceSettings || Object.keys(priceSettings).length === 0) {
-      priceSettings = {
-        parterre: {
-          "1": { "price": 1500, "color": "#ef4444" },
-          "2": { "price": 1400, "color": "#fca5a5" },
-          "3": { "price": 1300, "color": "#f97316" },
-          "4-7": { "price": 1100, "color": "#eab308" },
-          "8-12": { "price": 1000, "color": "#22c55e" },
-          "13-17": { "price": 800, "color": "#86efac" },
-          "default": { "price": 600, "color": "#60a5fa" }
-        }
-      };
+      // Инициализация пустой структуры
+      priceSettings = { parterre: {}, central: {} };
     }
     render();
   } catch (e) { console.error('Ошибка загрузки настроек'); }
@@ -473,7 +471,6 @@ document.body.addEventListener('click', async e => {
   const key = btn.dataset.key;
   
   if (isAdminMode) {
-    // Убираем проверку на disabled для админа
     if (btn.classList.contains('blocked')) {
       if(confirm('Разблокировать?')) await toggleBlock(key);
     } else {
@@ -482,7 +479,7 @@ document.body.addEventListener('click', async e => {
     return;
   }
 
-  if (btn.classList.contains('disabled')) return; // Only regular users are blocked by disabled
+  if (btn.classList.contains('disabled')) return;
 
   if (selected.has(key)) {
     selected.delete(key); btn.classList.remove('selected');
@@ -526,34 +523,106 @@ document.getElementById('adminBtn').addEventListener('click', () => {
   }
 });
 
+// ВИЗУАЛЬНЫЕ НАСТРОЙКИ ЦЕН
 function openSettings() {
-  document.getElementById('settingsJson').value = JSON.stringify(priceSettings, null, 2);
+  const container = document.getElementById('settingsRowsList');
+  container.innerHTML = '';
+  
+  const parterreConf = priceSettings['parterre'] || {};
+  const centralConf = priceSettings['central'] || {};
+  
+  // Базовая цена
+  let def = parterreConf['default'] || { price: 600, color: '#60a5fa' };
+  container.innerHTML += `
+    <div style="background:#1f2937; padding:15px; margin-bottom:15px; border-radius:8px;">
+      <div style="font-weight:bold; margin-bottom:10px;">По умолчанию (Балконы)</div>
+      <div style="display:flex; align-items:center; gap:15px;">
+        <label style="margin:0;">Цена: <input type="number" id="set-default-price" value="${def.price}"></label>
+        <label style="margin:0;">Цвет: <input type="color" id="set-default-color" value="${def.color}"></label>
+      </div>
+    </div>
+  `;
+
+  // Партер
+  container.innerHTML += `<div style="font-weight:bold; margin:15px 0 10px; font-size:15px;">Партер (Ряды 1-25)</div>`;
+  for (let r = 1; r <= 25; r++) {
+     let rowData = parterreConf[r] || def;
+     container.innerHTML += `
+       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #2a3446;">
+         <span style="font-size:14px; color:#ccc;">Ряд ${r}</span>
+         <div style="display:flex; align-items:center; gap:10px;">
+           <input type="number" id="set-p-${r}-price" value="${rowData.price}">
+           <input type="color" id="set-p-${r}-color" value="${rowData.color}">
+         </div>
+       </div>
+     `;
+  }
+
+  // Центральный балкон
+  container.innerHTML += `<div style="font-weight:bold; margin:20px 0 10px; font-size:15px;">Центральный балкон (Ряды 1-5)</div>`;
+  for (let r = 1; r <= 5; r++) {
+     let rowData = centralConf[r] || def;
+     container.innerHTML += `
+       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #2a3446;">
+         <span style="font-size:14px; color:#ccc;">Ряд ${r}</span>
+         <div style="display:flex; align-items:center; gap:10px;">
+           <input type="number" id="set-c-${r}-price" value="${rowData.price}">
+           <input type="color" id="set-c-${r}-color" value="${rowData.color}">
+         </div>
+       </div>
+     `;
+  }
+  
   document.getElementById('settingsError').textContent = '';
   document.getElementById('settingsModal').hidden = false;
 }
 
 async function saveSettings() {
-  const jsonStr = document.getElementById('settingsJson').value;
   const errorEl = document.getElementById('settingsError');
   try {
-    const parsed = JSON.parse(jsonStr);
+    const newSettings = { parterre: {}, central: {} };
+    
+    // По умолчанию
+    newSettings.parterre['default'] = {
+        price: Number(document.getElementById('set-default-price').value) || 600,
+        color: document.getElementById('set-default-color').value
+    };
+    
+    // Партер
+    for (let r = 1; r <= 25; r++) {
+        newSettings.parterre[r] = {
+            price: Number(document.getElementById(`set-p-${r}-price`).value) || 600,
+            color: document.getElementById(`set-p-${r}-color`).value
+        };
+    }
+    
+    // Центральный
+    for (let r = 1; r <= 5; r++) {
+        newSettings.central[r] = {
+            price: Number(document.getElementById(`set-c-${r}-price`).value) || 600,
+            color: document.getElementById(`set-c-${r}-color`).value
+        };
+    }
+
     const res = await fetch(`/api/admin/settings?pass=${ADMIN_PASSWORD}`, {
-      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(parsed)
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newSettings)
     });
+    
     if (res.ok) {
-      priceSettings = parsed;
+      priceSettings = newSettings;
       document.getElementById('settingsModal').hidden = true;
       render();
       showToast('Настройки сохранены!');
     } else {
       const d = await res.json();
-      errorEl.textContent = 'Ошибка: ' + (d.error || 'Сервер не принял данные');
+      errorEl.textContent = 'Ошибка сервера: ' + (d.error || '');
     }
   } catch (e) {
-    errorEl.textContent = 'Неверный формат JSON. Проверьте скобки и кавычки.';
+    errorEl.textContent = 'Ошибка сохранения: ' + e.message;
   }
 }
 
+// БРОНИРОВАНИЕ
 document.getElementById('bookBtn').addEventListener('click', () => {
   if (!selected.size) return;
   document.getElementById('modalSeats').textContent = seatsText();
