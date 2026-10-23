@@ -179,22 +179,32 @@
 <div class="modal" id="settingsModal" hidden>
   <div class="modal-card" style="max-height: 90vh; overflow-y: auto;">
     <h2>Настройки цен</h2>
-    <p style="font-size:12px; color:var(--muted); margin-bottom:15px;">
-      Настройте базовую цену и добавьте правила для отдельных мест или рядов.
-    </p>
     
     <div style="background:#1f2937; padding:15px; margin-bottom:15px; border-radius:8px;">
-      <div style="font-weight:bold; margin-bottom:10px;">Цена по умолчанию (Балконы)</div>
-      <div style="display:flex; align-items:center; gap:15px;">
-        <label style="margin:0;">Цена: <input type="number" id="set-default-price" style="width:70px; padding:6px; border-radius:6px; border:1px solid #2a3446; background:#111721; color:var(--text); margin:0;"></label>
-        <label style="margin:0;">Цвет: <input type="color" id="set-default-color" style="width:40px; height:30px; padding:0; border:none; border-radius:4px; background:none; cursor:pointer;"></label>
+      <div style="font-weight:bold; margin-bottom:10px;">Быстрое применение (весь ряд)</div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <span style="font-size:13px;">Ряды с</span>
+        <input type="number" id="quick-start" value="1" style="width:50px; padding:6px; border-radius:6px; border:1px solid #2a3446; background:#111721; color:var(--text); margin:0;">
+        <span style="font-size:13px;">по</span>
+        <input type="number" id="quick-end" value="5" style="width:50px; padding:6px; border-radius:6px; border:1px solid #2a3446; background:#111721; color:var(--text); margin:0;">
+        <input type="number" id="quick-price" placeholder="Цена" value="1500" style="width:70px; padding:6px; border-radius:6px; border:1px solid #2a3446; background:#111721; color:var(--text); margin:0;">
+        <input type="color" id="quick-color" value="#ef4444" style="width:40px; height:30px; padding:0; border:none; border-radius:4px; background:none; cursor:pointer;">
+        <button type="button" class="btn primary" onclick="applyQuickRule()">Применить</button>
       </div>
     </div>
 
-    <div style="font-weight:bold; margin:15px 0 10px; font-size:15px;">Специальные правила</div>
+    <div style="background:#1f2937; padding:15px; margin-bottom:15px; border-radius:8px;">
+      <div style="font-weight:bold; margin-bottom:10px;">Цена по умолчанию (Балконы)</div>
+      <div style="display:flex; align-items:center; gap:15px;">
+        <label style="margin:0; font-size:13px;">Цена: <input type="number" id="set-default-price" style="width:70px; padding:6px; border-radius:6px; border:1px solid #2a3446; background:#111721; color:var(--text); margin:0;"></label>
+        <label style="margin:0; font-size:13px;">Цвет: <input type="color" id="set-default-color" style="width:40px; height:30px; padding:0; border:none; border-radius:4px; background:none; cursor:pointer;"></label>
+      </div>
+    </div>
+
+    <div style="font-weight:bold; margin:15px 0 10px; font-size:15px;">Точечные правила (для конкретных мест)</div>
     <div id="rules-container" style="display:flex; flex-direction:column; gap:8px;"></div>
     
-    <button type="button" class="btn ghost" style="width:100%; margin-top:15px; border:1px dashed #555;" onclick="addRuleRow()">+ Добавить правило</button>
+    <button type="button" class="btn ghost" style="width:100%; margin-top:15px; border:1px dashed #555;" onclick="addRuleRow()">+ Добавить точечное правило</button>
 
     <div style="display:flex; gap:10px; margin-top:20px; position:sticky; bottom:-24px; background:var(--panel); padding:15px 0;">
       <button type="button" class="btn ghost" style="flex:1" onclick="document.getElementById('settingsModal').hidden = true">Отмена</button>
@@ -304,10 +314,11 @@ function parseRow(str, maxSeat) {
   return row;
 }
 
-// НОВАЯ ЛОГИКА ЦВЕТОВ (проверяет правила)
+// Ищем правила с конца (последние добавленные имеют приоритет)
 function getPriceAndColor(zone, row, seatNum) {
   if (priceSettings.rules) {
-    for (let r of priceSettings.rules) {
+    for (let i = priceSettings.rules.length - 1; i >= 0; i--) {
+      let r = priceSettings.rules[i];
       if (r.zone === zone && row == r.row && seatNum >= r.start && seatNum <= r.end) {
         return { price: r.price, color: r.color };
       }
@@ -360,7 +371,7 @@ function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isPart
           rowDiv.appendChild(a);
         } else if (item.type === 'seat') {
           const side = getEventSide(prefix, rowNum, item.num);
-          const { price, color } = getPriceAndColor(prefix, rowNum, item.num); // Передаем item.num
+          const { price, color } = getPriceAndColor(prefix, rowNum, item.num);
           rowDiv.appendChild(createSeat(`${prefix}-${rowNum}-${item.num}`, item.num, `${zoneName} Ряд ${rowNum} Место ${item.num}`, color, price, side, zoneName, rowNum));
         } else if (item.type === 'dj') {
           const dj = document.createElement('div'); dj.className = 'dj-booth'; dj.style.width = `${item.width * 24}px`; dj.textContent = 'DJ'; rowDiv.appendChild(dj);
@@ -370,7 +381,7 @@ function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isPart
           const a = document.createElement('div'); a.className = 'aisle'; a.style.width = '20px'; rowDiv.appendChild(a);
         } else {
           let side = defaultSide || getEventSide(prefix, rowNum, item.num);
-          const { price, color } = getPriceAndColor('balcon', rowNum, item.num); // Балконы берут дефолт
+          const { price, color } = getPriceAndColor('balcon', rowNum, item.num);
           rowDiv.appendChild(createSeat(`${prefix}-${rowNum}-${item.num}`, item.num, `${zoneName} Ряд ${rowNum} Место ${item.num}`, color, price, side, zoneName, rowNum));
         }
       }
@@ -535,6 +546,33 @@ function openSettings() {
   (priceSettings.rules || []).forEach(r => addRuleRow(r));
   document.getElementById('settingsError').textContent = '';
   document.getElementById('settingsModal').hidden = false;
+}
+
+// БЫСТРОЕ ПРИМЕНЕНИЕ ЦЕНЫ НА РЯДЫ
+function applyQuickRule() {
+    const start = Number(document.getElementById('quick-start').value);
+    const end = Number(document.getElementById('quick-end').value);
+    const price = Number(document.getElementById('quick-price').value);
+    const color = document.getElementById('quick-color').value;
+    
+    if (start > end) return alert('Начальный ряд не может быть больше конечного');
+
+    if (!priceSettings.rules) priceSettings.rules = [];
+
+    for (let r = start; r <= end; r++) {
+        // Удаляем старые правила для этого ряда, чтобы не засорять список
+        priceSettings.rules = priceSettings.rules.filter(rule => !(rule.zone === 'parterre' && rule.row === r));
+        // Добавляем новое правило на весь ряд (от 1 до 99 места)
+        priceSettings.rules.push({ zone: 'parterre', row: r, start: 1, end: 99, price: price, color: color });
+    }
+    
+    // Обновляем визуал в модалке и на главном экране
+    const container = document.getElementById('rules-container');
+    container.innerHTML = '';
+    priceSettings.rules.forEach(r => addRuleRow(r));
+    
+    render();
+    showToast('Цвета для рядов применены! Не забудьте нажать "Сохранить".');
 }
 
 function addRuleRow(rule = { zone: 'parterre', row: 1, start: 1, end: 39, price: 1500, color: '#ef4444' }) {
