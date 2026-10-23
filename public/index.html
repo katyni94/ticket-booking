@@ -57,7 +57,7 @@
   
   /* Диджейская стойка */
   .dj-booth {
-    width: 30px; height: 20px; background: #333; border: 1px solid #555; border-radius: 4px;
+    height: 20px; background: #333; border: 1px solid #555; border-radius: 4px;
     display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #aaa;
   }
 
@@ -105,6 +105,17 @@
   
   .toast{position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#1a8a4d; color:#fff; padding:10px 20px; border-radius:8px; opacity:0; transition:.3s; pointer-events:none; z-index:300;}
   .toast.show{opacity:1;}
+
+  /* КАСТОМНЫЙ TOOLTIP */
+  #tooltip {
+    position: fixed; z-index: 999; background: #fff; color: #111; border-radius: 8px;
+    padding: 10px 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); pointer-events: none;
+    display: none; text-align: center; font-size: 13px; min-width: 150px;
+    transform: translate(-50%, -120%); /* Позиционируем над курсором */
+  }
+  #tooltip .t-row { font-weight: 700; font-size: 15px; margin-bottom: 2px; color: #000; }
+  #tooltip .t-zone { color: #666; font-size: 12px; margin-bottom: 4px; }
+  #tooltip .t-price { font-weight: 600; color: #222; }
 </style>
 </head>
 <body>
@@ -114,8 +125,8 @@
 
 <!-- Переключатель событий -->
 <div class="event-switch">
-  <button id="btn-event-left" class="active" onclick="switchEvent('left')">Живи ярче (Левая часть)</button>
-  <button id="btn-event-right" onclick="switchEvent('right')">Танцы без возраста (Правая часть)</button>
+  <button id="btn-event-left" class="active" onclick="switchEvent('left')">Танцы без возраста (Левая часть)</button>
+  <button id="btn-event-right" onclick="switchEvent('right')">Живи ярче (Правая часть)</button>
 </div>
 
 <div class="stage">СЦЕНА</div>
@@ -205,13 +216,20 @@
   </div>
 </div>
 
+<!-- TOOLTIP -->
+<div id="tooltip">
+  <div class="t-row" id="tt-row">Ряд: 8, место: 23</div>
+  <div class="t-zone" id="tt-zone">Партер</div>
+  <div class="t-price" id="tt-price">2000 руб.</div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 const MAX_SEATS = 4;
 const POLL_MS = 5000;
 const ADMIN_PASSWORD = "admin123";
-let currentEvent = 'left';
+let currentEvent = 'left'; // 'left' = Танцы без возраста, 'right' = Живи ярче
 
 let bookedSet = new Set();
 let selected  = new Set();
@@ -219,7 +237,7 @@ let cancelSeats = new Set();
 let isAdminMode = false;
 
 // ==========================================
-// ТОЧНЫЕ ДАННЫЕ ИЗ ВАШЕЙ ТЕКСТОВОЙ СХЕМЫ
+// ДАННЫЕ ИЗ ВАШЕЙ ТЕКСТОВОЙ СХЕМЫ
 // ==========================================
 const parterreStrings = [
   "-000000000-000000000000000000000-000000000-", // 1
@@ -259,69 +277,76 @@ const centralStrings = [
 ];
 const centralMaxSeats = [27, 28, 30, 31, 28];
 
-// Балконы (матрицы: сверху вниз, слева направо)
-// Создаем сетки на основе вашего описания (счет мест снизу вверх)
+// --- ТОЧНЫЕ ДИАПАЗОНЫ ДЛЯ "ТАНЦЫ БЕЗ ВОЗРАСТА" (Левая часть) ---
+// Где 1-й элемент - от какого места, 2-й - до какого (включительно)
+const tanci_parterre = {
+  1: [19, 39], 2: [18, 37], 3: [18, 37], 4: [17, 35], 5: [10, 20], 
+  6: [17, 35], 7: [15, 31], 8: [16, 33], 9: [15, 32], 10: [14, 30], 
+  11: [14, 30], 12: [14, 29], 13: [14, 29], 14: [14, 29], 15: [14, 29], 
+  16: [14, 28], 17: [14, 28], 18: [13, 27], 19: [11, 19], 20: [11, 19], 21: [15, 19],
+  // 22-25 ряды: делим пополам
+  22: [15, 30], 23: [10, 20], 24: [9, 17], 25: [10, 19]
+};
+
+const tanci_central = {
+  1: [14, 27], 2: [14, 28], 3: [15, 30], 4: [16, 31], 5: [15, 28]
+};
+
+function getEventSide(zone, row, seatNum) {
+  if (zone.includes('left-balc')) return 'left';
+  if (zone.includes('right-balc')) return 'right';
+  
+  if (zone === 'central') {
+    const range = tanci_central[row];
+    if (range && seatNum >= range[0] && seatNum <= range[1]) return 'left';
+    return 'right';
+  }
+  
+  if (zone === 'parterre') {
+    const range = tanci_parterre[row];
+    if (range && seatNum >= range[0] && seatNum <= range[1]) return 'left';
+    return 'right';
+  }
+  return 'left'; // fallback
+}
+
+// Балконы (генерация)
 function generateBalcGrid(cols, totalRows, colConfigs) {
   const grid = Array(totalRows).fill(null).map(() => Array(cols).fill(null));
   let seatCounters = Array(cols).fill(1);
-  
   for (let r = totalRows - 1; r >= 0; r--) {
     for (let c = 0; c < cols; c++) {
-      const config = colConfigs[c];
-      if (config.present(r)) {
-        grid[r][c] = { num: seatCounters[c]++ };
-      }
+      if (colConfigs[c].present(r)) grid[r][c] = { num: seatCounters[c]++ };
     }
   }
   return grid;
 }
+const leftBalcAGrid = generateBalcGrid(4, 18, [{present:()=>true},{present:(r)=>r>=1},{present:(r)=>r>=1},{present:(r)=>r>=2}]);
+const rightBalcAGrid = generateBalcGrid(4, 18, [{present:()=>true},{present:(r)=>r>=1},{present:()=>true},{present:(r)=>r>=1}]);
+const leftBalcBGrid = generateBalcGrid(2, 20, [{present:(r)=>(r>=0&&r<=5)||r>=9},{present:(r)=>(r>=1&&r<=5)||r>=9}]);
+const rightBalcBGrid = generateBalcGrid(2, 20, [{present:(r)=>(r>=0&&r<=5)||r>=9},{present:(r)=>(r>=1&&r<=5)||r>=9}]);
 
-// Левый А: 4 колонки, 18 рядов. 1-я (справа) везде, 2-3 с 1-го ряда, 4-я со 2-го.
-const leftBalcAGrid = generateBalcGrid(4, 18, [
-  { present: (r) => true },           // Col 1 (right)
-  { present: (r) => r >= 1 },         // Col 2
-  { present: (r) => r >= 1 },         // Col 3
-  { present: (r) => r >= 2 }          // Col 4 (left)
-]);
-
-// Правый А: 4 колонки, 18 рядов. 1-я (слева) везде, 2-я с 1-го, 3-я везде, 4-я с 1-го.
-const rightBalcAGrid = generateBalcGrid(4, 18, [
-  { present: (r) => true },           // Col 1 (left)
-  { present: (r) => r >= 1 },         // Col 2
-  { present: (r) => true },           // Col 3
-  { present: (r) => r >= 1 }          // Col 4 (right)
-]);
-
-// Левый Б: 2 колонки, 20 рядов. 1-я (справа): с 0 по 5, и с 9 по 19. 2-я (слева): с 1 по 5, и с 9 по 19.
-const leftBalcBGrid = generateBalcGrid(2, 20, [
-  { present: (r) => (r >= 0 && r <= 5) || r >= 9 }, // Col 1 (right)
-  { present: (r) => (r >= 1 && r <= 5) || r >= 9 }  // Col 2 (left)
-]);
-
-// Правый Б (зеркален): 1-я (слева) как левый 1-й, 2-я как левый 2-й.
-const rightBalcBGrid = generateBalcGrid(2, 20, [
-  { present: (r) => (r >= 0 && r <= 5) || r >= 9 }, // Col 1 (left)
-  { present: (r) => (r >= 1 && r <= 5) || r >= 9 }  // Col 2 (right)
-]);
-
-// Парсер строки
 function parseRow(str, maxSeat) {
   const row = [];
   let seatNum = maxSeat;
   let aisleWidth = 0;
+  let djCount = 0;
   
   for (let i = 0; i < str.length; i++) {
     const char = str[i];
     if (char === '0') {
+      if (djCount > 0) { row.push({ type: 'dj', width: djCount }); djCount = 0; }
       if (aisleWidth > 0) { row.push({ type: 'aisle', width: aisleWidth }); aisleWidth = 0; }
       row.push({ type: 'seat', num: seatNum-- });
     } else if (char === '-') {
+      if (djCount > 0) { row.push({ type: 'dj', width: djCount }); djCount = 0; }
       aisleWidth++;
     } else if (char === 'д') {
       if (aisleWidth > 0) { row.push({ type: 'aisle', width: aisleWidth }); aisleWidth = 0; }
-      if (row.length === 0 || row[row.length-1].type !== 'dj') row.push({ type: 'dj' });
+      djCount++;
     }
   }
+  if (djCount > 0) row.push({ type: 'dj', width: djCount });
   if (aisleWidth > 0) row.push({ type: 'aisle', width: aisleWidth });
   return row;
 }
@@ -339,17 +364,20 @@ function getPriceAndColor(zone, row) {
   return { price, color };
 }
 
-function createSeat(key, num, title, color, price, side) {
+function createSeat(key, num, title, color, price, side, zoneName, rowNum) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'seat';
   btn.dataset.key = key;
   btn.dataset.side = side; 
+  btn.dataset.zone = zoneName;
+  btn.dataset.row = rowNum;
+  btn.dataset.seat = num;
+  btn.dataset.price = price;
   btn.textContent = num;
-  btn.title = `${title} (${price} ₽)`;
   btn.style.background = color;
 
-  if (side && side !== currentEvent) btn.classList.add('disabled');
+  if (side !== currentEvent) btn.classList.add('disabled');
   
   if (bookedSet.has(key)) {
     if (bookedSet.has(key + '_blocked')) btn.classList.add('blocked');
@@ -382,23 +410,23 @@ function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isPart
     rowData.forEach(item => {
       if (isParterre) {
         if (item.type === 'aisle') {
-          const a = document.createElement('div'); a.className = 'aisle'; a.style.width = `${item.width * 4}px`; rowDiv.appendChild(a);
+          const a = document.createElement('div'); a.className = 'aisle'; a.style.width = `${item.width * 4.5}px`; rowDiv.appendChild(a);
         } else if (item.type === 'seat') {
-          const side = item.num <= 19 ? 'right' : 'left';
-          rowDiv.appendChild(createSeat(`${prefix}-${rowNum}-${item.num}`, item.num, `${zoneName} Ряд ${rowNum} Место ${item.num}`, color, price, side));
+          const side = getEventSide(prefix, rowNum, item.num);
+          rowDiv.appendChild(createSeat(`${prefix}-${rowNum}-${item.num}`, item.num, `${zoneName} Ряд ${rowNum} Место ${item.num}`, color, price, side, zoneName, rowNum));
         } else if (item.type === 'dj') {
-          const dj = document.createElement('div'); dj.className = 'dj-booth'; dj.textContent = 'DJ'; rowDiv.appendChild(dj);
+          // Диджейка занимает ровно столько места, сколько символов 'д' (6 шт * 24px)
+          const dj = document.createElement('div'); dj.className = 'dj-booth'; 
+          dj.style.width = `${item.width * 24}px`; 
+          dj.textContent = 'DJ'; 
+          rowDiv.appendChild(dj);
         }
       } else {
-        // Для обычных сеток (балконы и ЦБ)
         if (item === null) {
           const a = document.createElement('div'); a.className = 'aisle'; a.style.width = '20px'; rowDiv.appendChild(a);
         } else {
-          // Для ЦБ делим пополам
-          let side = defaultSide;
-          if (prefix === 'central') side = item.num <= 15 ? 'right' : 'left';
-          
-          rowDiv.appendChild(createSeat(`${prefix}-${rowNum}-${item.num}`, item.num, `${zoneName} Ряд ${rowNum} Место ${item.num}`, color, price, side));
+          let side = defaultSide || getEventSide(prefix, rowNum, item.num);
+          rowDiv.appendChild(createSeat(`${prefix}-${rowNum}-${item.num}`, item.num, `${zoneName} Ряд ${rowNum} Место ${item.num}`, color, price, side, zoneName, rowNum));
         }
       }
     });
@@ -411,7 +439,7 @@ function render() {
   renderGrid('parterre', parterreData, 'parterre', 'Партер', null, true);
   
   const centralData = centralStrings.map((s, i) => parseRow(s, centralMaxSeats[i]));
-  renderGrid('central-balc', centralData, 'central', 'Центральный балкон', null, true); // use isParterre=true to parse aisles
+  renderGrid('central-balc', centralData, 'central', 'Центральный балкон', null, true);
   
   renderGrid('left-balc-b', leftBalcBGrid, 'left-balc-b', 'Левый балкон Б', 'left');
   renderGrid('left-balc-a', leftBalcAGrid, 'left-balc-a', 'Левый балкон А', 'left');
@@ -445,6 +473,39 @@ async function loadBookings(){
   } catch (e) { render(); }
 }
 
+// ==== TOOLTIP ЛОГИКА ====
+const tooltip = document.getElementById('tooltip');
+
+document.body.addEventListener('mouseover', e => {
+  const btn = e.target.closest('.seat');
+  if (!btn) return;
+  
+  const zone = btn.dataset.zone;
+  const row = btn.dataset.row;
+  const seat = btn.dataset.seat;
+  const price = btn.dataset.price;
+
+  document.getElementById('tt-row').textContent = `ряд: ${row}, место: ${seat}`;
+  document.getElementById('tt-zone').textContent = zone;
+  document.getElementById('tt-price').textContent = `${price} руб.`;
+  
+  tooltip.style.display = 'block';
+});
+
+document.body.addEventListener('mousemove', e => {
+  if (tooltip.style.display === 'block') {
+    tooltip.style.left = e.clientX + 'px';
+    tooltip.style.top = e.clientY + 'px';
+  }
+});
+
+document.body.addEventListener('mouseout', e => {
+  if (e.target.closest('.seat')) {
+    tooltip.style.display = 'none';
+  }
+});
+
+// ==== КЛИКИ И ОСТАЛЬНАЯ ЛОГИКА ====
 document.body.addEventListener('click', async e => {
   const btn = e.target.closest('.seat');
   if (!btn || btn.classList.contains('booked') || btn.classList.contains('disabled')) return;
@@ -514,13 +575,9 @@ function seatsText(){
     let zone = 'Балкон';
     let r = parts[parts.length-2]; let c = parts[parts.length-1];
     
-    if (parts[0] === 'parterre') {
-        zone = 'Партер'; r = parts[1]; c = parts[2];
-    } else if (parts[0] === 'central') {
-        zone = 'Центр. балкон'; r = parts[1]; c = parts[2];
-    } else if (parts[1] === 'balc') {
-        zone = parts[0] === 'left' ? 'Левый балкон' : 'Правый балкон'; r = parts[2]; c = parts[3];
-    }
+    if (parts[0] === 'parterre') { zone = 'Партер'; r = parts[1]; c = parts[2]; }
+    else if (parts[0] === 'central') { zone = 'Центр. балкон'; r = parts[1]; c = parts[2]; }
+    else if (parts[1] === 'balc') { zone = parts[0] === 'left' ? 'Левый балкон' : 'Правый балкон'; r = parts[2]; c = parts[3]; }
 
     if(!groups[`${zone} Ряд ${r}`]) groups[`${zone} Ряд ${r}`] = [];
     groups[`${zone} Ряд ${r}`].push(Number(c));
