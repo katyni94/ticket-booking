@@ -20,46 +20,20 @@
   h1{font-size:22px; margin:0 0 4px; font-weight:600; text-align:center}
   .sub{color:var(--muted); font-size:13px; margin-bottom:15px; text-align:center}
 
-  /* Переключатель событий */
-  .event-switch {
-    display: flex; gap: 10px; margin-bottom: 20px; background: #171d27; padding: 5px; border-radius: 12px;
-  }
-  .event-switch button {
-    background: transparent; color: var(--muted); border: none; padding: 10px 20px; border-radius: 8px; 
-    font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 14px;
-  }
-  .event-switch button.active {
-    background: var(--accent); color: #fff;
-  }
+  .event-switch { display: flex; gap: 10px; margin-bottom: 20px; background: #171d27; padding: 5px; border-radius: 12px; }
+  .event-switch button { background: transparent; color: var(--muted); border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 14px; }
+  .event-switch button.active { background: var(--accent); color: #fff; }
   
-  .stage{
-    width:min(400px,80%); height:40px; border-radius:0 0 50% 50%;
-    background:#2a3446; display:flex; align-items:center; justify-content:center;
-    color:#8b97a8; font-weight:600; letter-spacing:2px; text-transform:uppercase;
-    margin-bottom:30px; border-top:4px solid #1f2735;
-  }
-
+  .stage{ width:min(400px,80%); height:40px; border-radius:0 0 50% 50%; background:#2a3446; display:flex; align-items:center; justify-content:center; color:#8b97a8; font-weight:600; letter-spacing:2px; text-transform:uppercase; margin-bottom:30px; border-top:4px solid #1f2735; }
   .zone-title{font-size:11px; color:var(--muted); text-transform:uppercase; margin:15px 0 5px; font-weight:600; text-align:center}
   
   .hall-wrap{width:100%; max-width:100%; overflow-x:auto; padding-bottom:20px; display:flex; justify-content:center;}
-  
-  /* Раскладка */
   .hall-layout { display: flex; justify-content: center; gap: 30px; align-items: flex-start; }
-  
-  /* Балконы и Центр */
   .col { display: flex; flex-direction: column; align-items: center; }
-  
-  /* Строки и места */
   .row { display: flex; gap: 4px; justify-content: center; margin-bottom: 4px; min-height: 20px; }
   
-  /* Проходы */
   .aisle { height: 20px; flex-shrink: 0; } 
-  
-  /* Диджейская стойка */
-  .dj-booth {
-    height: 20px; background: #333; border: 1px solid #555; border-radius: 4px;
-    display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #aaa;
-  }
+  .dj-booth { height: 20px; background: #333; border: 1px solid #555; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #aaa; }
 
   .seat{
     width: 20px; height: 20px; border:0; border-radius:4px 4px 1px 1px;
@@ -71,16 +45,12 @@
   .seat.selected{background:var(--selected) !important; color:#1a1206; box-shadow:0 0 0 2px rgba(245,158,11,.6); text-shadow: none;}
   .seat.booked{background:var(--booked) !important; color:transparent; cursor:not-allowed;}
   .seat.blocked{background:var(--blocked) !important; color:transparent; cursor:not-allowed; border:1px solid #333;}
-  
-  /* Неактивная половина зала */
   .seat.disabled{opacity: 0.15; cursor: not-allowed; filter: grayscale(100%);}
 
-  /* Легенда */
   .legend{display:flex; gap:15px; flex-wrap:wrap; justify-content:center; margin:15px 0; font-size:12px; color:var(--muted)}
   .legend span{display:flex; align-items:center; gap:5px}
   .dot{width:12px; height:12px; border-radius:3px; display:inline-block}
 
-  /* Панель */
   .bar{
     position:fixed; left:0; right:0; bottom:0; background:rgba(23,29,39,.96);
     border-top:1px solid #222b39; padding:10px 16px; display:flex; align-items:center; justify-content:center; gap:15px; flex-wrap:wrap;
@@ -95,23 +65,21 @@
   .btn.admin{background:#7c3aed; color:#fff; margin-left: 15px;}
   .btn.admin.active{background:#ef4444; box-shadow: 0 0 10px #ef4444;}
 
-  /* Модалки */
   .modal{position:fixed; inset:0; z-index:200; background:rgba(5,8,12,.8); display:flex; align-items:center; justify-content:center; padding:16px}
   .modal[hidden]{display:none}
   .modal-card{background:var(--panel); border-radius:16px; padding:24px; width:100%; max-width:390px}
   .modal-seats{color:var(--muted); font-size:13px; white-space:pre-line; margin:0 0 15px; line-height:1.5}
-  input{width:100%; margin-top:5px; margin-bottom:15px; padding:11px; border-radius:8px; border:1px solid #2a3446; background:#111721; color:var(--text);}
+  input, textarea{width:100%; margin-top:5px; margin-bottom:15px; padding:11px; border-radius:8px; border:1px solid #2a3446; background:#111721; color:var(--text); font-family:monospace;}
   .error{color:#f87171; font-size:13px; margin-top:10px; min-height:16px;}
   
   .toast{position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#1a8a4d; color:#fff; padding:10px 20px; border-radius:8px; opacity:0; transition:.3s; pointer-events:none; z-index:300;}
   .toast.show{opacity:1;}
 
-  /* КАСТОМНЫЙ TOOLTIP */
   #tooltip {
     position: fixed; z-index: 999; background: #fff; color: #111; border-radius: 8px;
     padding: 10px 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); pointer-events: none;
     display: none; text-align: center; font-size: 13px; min-width: 150px;
-    transform: translate(-50%, -120%); /* Позиционируем над курсором */
+    transform: translate(-50%, -120%);
   }
   #tooltip .t-row { font-weight: 700; font-size: 15px; margin-bottom: 2px; color: #000; }
   #tooltip .t-zone { color: #666; font-size: 12px; margin-bottom: 4px; }
@@ -123,7 +91,6 @@
 <h1>Концертный зал</h1>
 <div class="sub">25 ноября в 19:00</div>
 
-<!-- Переключатель событий -->
 <div class="event-switch">
   <button id="btn-event-left" class="active" onclick="switchEvent('left')">Танцы без возраста (Левая часть)</button>
   <button id="btn-event-right" onclick="switchEvent('right')">Живи ярче (Правая часть)</button>
@@ -133,7 +100,6 @@
 
 <div class="hall-wrap">
   <div class="hall-layout">
-    <!-- ЛЕВАЯ КОЛОНКА (Балконы Б и А) -->
     <div class="col">
       <div class="zone-title">Левый балкон Б</div>
       <div id="left-balc-b"></div>
@@ -141,16 +107,13 @@
       <div id="left-balc-a"></div>
     </div>
 
-    <!-- ЦЕНТР (ПАРТЕР И ЦБ) -->
     <div class="col">
       <div class="zone-title">Партер</div>
       <div id="parterre"></div>
-      
       <div class="zone-title" style="margin-top:30px">Центральный балкон</div>
       <div id="central-balc"></div>
     </div>
 
-    <!-- ПРАВАЯ КОЛОНКА (Балконы Б и А) -->
     <div class="col">
       <div class="zone-title">Правый балкон Б</div>
       <div id="right-balc-b"></div>
@@ -160,31 +123,23 @@
   </div>
 </div>
 
-<!-- ЛЕГЕНДА -->
 <div class="legend">
   <span><i class="dot" style="background:#2a3342"></i>свободно</span>
   <span><i class="dot" style="background:#f59e0b"></i>выбрано</span>
   <span><i class="dot" style="background:#5a2a36"></i>занято</span>
   <span><i class="dot" style="background:#000; border:1px solid #555"></i>не продается</span>
 </div>
-<div class="legend" style="margin-top:-5px;">
-  <span><i class="dot" style="background:#ef4444"></i>1500₽</span>
-  <span><i class="dot" style="background:#fca5a5"></i>1400₽</span>
-  <span><i class="dot" style="background:#f97316"></i>1300₽</span>
-  <span><i class="dot" style="background:#eab308"></i>1100₽</span>
-  <span><i class="dot" style="background:#22c55e"></i>1000₽</span>
-  <span><i class="dot" style="background:#86efac"></i>800₽</span>
-  <span><i class="dot" style="background:#60a5fa"></i>600₽</span>
-</div>
+<div class="legend" id="priceLegend" style="margin-top:-5px;"></div>
 
 <div class="bar">
   <div>Выбрано: <b id="count">0</b></div>
   <button class="btn ghost" id="cancelBtnOpen">Отменить бронь</button>
   <button class="btn primary" id="bookBtn" disabled>Забронировать</button>
   <button class="btn admin" id="adminBtn">Войти как Админ</button>
+  <button class="btn primary" id="settingsBtn" style="display:none; background:#f59e0b;" onclick="openSettings()">⚙ Настройки цен</button>
 </div>
 
-<!-- МОДАЛКИ -->
+<!-- МОДАЛКА БРОНИРОВАНИЯ -->
 <div class="modal" id="modal" hidden>
   <div class="modal-card">
     <h2>Подтверждение брони</h2>
@@ -201,6 +156,7 @@
   </div>
 </div>
 
+<!-- МОДАЛКА ОТМЕНЫ -->
 <div class="modal" id="cancelModal" hidden>
   <div class="modal-card">
     <h2>Отмена брони</h2>
@@ -216,11 +172,26 @@
   </div>
 </div>
 
-<!-- TOOLTIP -->
+<!-- МОДАЛКА НАСТРОЕК -->
+<div class="modal" id="settingsModal" hidden>
+  <div class="modal-card">
+    <h2>Настройки цен (JSON)</h2>
+    <p style="font-size:12px; color:var(--muted); margin-bottom:10px;">
+      Формат: "номер_ряда" или "от-до": {"price": цена, "color": "цвет"}.<br>Можно использовать "default" для остальных.
+    </p>
+    <textarea id="settingsJson" rows="12" style="width:100%; font-family:monospace; font-size:12px;"></textarea>
+    <div style="display:flex; gap:10px; margin-top:10px;">
+      <button type="button" class="btn ghost" style="flex:1" onclick="document.getElementById('settingsModal').hidden = true">Отмена</button>
+      <button type="button" class="btn primary" style="flex:1; background:#22c55e;" onclick="saveSettings()">Сохранить</button>
+    </div>
+    <p class="error" id="settingsError"></p>
+  </div>
+</div>
+
 <div id="tooltip">
-  <div class="t-row" id="tt-row">Ряд: 8, место: 23</div>
-  <div class="t-zone" id="tt-zone">Партер</div>
-  <div class="t-price" id="tt-price">2000 руб.</div>
+  <div class="t-row" id="tt-row"></div>
+  <div class="t-zone" id="tt-zone"></div>
+  <div class="t-price" id="tt-price"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -229,88 +200,61 @@
 const MAX_SEATS = 4;
 const POLL_MS = 5000;
 const ADMIN_PASSWORD = "admin123";
-let currentEvent = 'left'; // 'left' = Танцы без возраста, 'right' = Живи ярче
+let currentEvent = 'left';
 
 let bookedSet = new Set();
 let selected  = new Set();
 let cancelSeats = new Set();
 let isAdminMode = false;
+let priceSettings = {};
 
-// ==========================================
-// ДАННЫЕ ИЗ ВАШЕЙ ТЕКСТОВОЙ СХЕМЫ
-// ==========================================
+// --- СХЕМА ЗАЛА ---
 const parterreStrings = [
-  "-000000000-000000000000000000000-000000000-", // 1
-  "--00000000-000000000000000000000-00000000-",  // 2
-  "--00000000-000000000000000000000-00000000-",  // 3
-  "--00000000--00000000000000000000-0000000-",   // 4
-  "---------------00000000000000000000-----------", // 5
-  "---00000000-0000000000000000000--00000000-",  // 6
-  "------000000-0000000000000000000--000000-",   // 7
-  "-----0000000-0000000000000000000--0000000-",  // 8
-  "-----0000000-000000000000000000---0000000-",  // 9
-  "------000000-000000000000000000--000000-",    // 10
-  "------000000-000000000000000000--000000-",    // 11
-  "------000000--00000000000000000--000000-",    // 12
-  "------000000--00000000000000000--000000-",    // 13
-  "------000000--00000000000000000--000000-",    // 14
-  "------000000--00000000000000000--000000-",    // 15
-  "-------000000--0000000000000000--000000-",    // 16
-  "-------000000--0000000000000000--000000-",    // 17
-  "-------000000--0000000000000000-00000-",      // 18
-  "--------00000--0000дддддд00000--00000-",      // 19
-  "--------00000--0000дддддд00000--00000-",      // 20
-  "--------00000--0000дддддд00000--00000-",      // 21
-  "------000000000000000000000000000000-",       // 22
-  "-----------00000000000000000000----",         // 23
-  "------------00000000000000000------",         // 24
-  "-----------0000000000000000000----"           // 25
+  "-000000000-000000000000000000000-000000000-", "--00000000-000000000000000000000-00000000-", "--00000000-000000000000000000000-00000000-",
+  "--00000000--00000000000000000000-0000000-", "---------------00000000000000000000-----------", "---00000000-0000000000000000000--00000000-",
+  "------000000-0000000000000000000--000000-", "-----0000000-0000000000000000000--0000000-", "-----0000000-000000000000000000---0000000-",
+  "------000000-000000000000000000--000000-", "------000000-000000000000000000--000000-", "------000000--00000000000000000--000000-",
+  "------000000--00000000000000000--000000-", "------000000--00000000000000000--000000-", "------000000--00000000000000000--000000-",
+  "-------000000--0000000000000000--000000-", "-------000000--0000000000000000--000000-", "-------000000--0000000000000000-00000-",
+  "--------00000--0000дддддд00000--00000-", "--------00000--0000дддддд00000--00000-", "--------00000--0000дддддд00000--00000-",
+  "------000000000000000000000000000000-", "-----------00000000000000000000----", "------------00000000000000000------",
+  "-----------0000000000000000000----"
 ];
 const parterreMaxSeats = [39, 37, 37, 35, 20, 35, 31, 33, 32, 30, 30, 29, 29, 29, 29, 28, 28, 27, 19, 19, 19, 30, 20, 17, 19];
 
+// Добавили разрыв в 4 пустоты (----) между 15 и 14 местами
 const centralStrings = [
-  "---------000000000000000000000000000----------", // 1
-  "--------0000000000000000000000000000----------", // 2
-  "-------00000000000000000000000000000----------", // 3
-  "-------000000000000000000000000000000----------", // 4
-  "-------00000000000000----00000000000000----------" // 5
+  "---------00000000000000----0000000000000----------", // 1 (27 мест)
+  "--------00000000000000----00000000000000----------", // 2 (28 мест)
+  "-------000000000000000----000000000000000---------", // 3 (30 мест)
+  "-------0000000000000000----00000000000000---------", // 4 (31 мест)
+  "-------00000000000000----00000000000000----------"  // 5 (28 мест)
 ];
 const centralMaxSeats = [27, 28, 30, 31, 28];
 
-// --- ТОЧНЫЕ ДИАПАЗОНЫ ДЛЯ "ТАНЦЫ БЕЗ ВОЗРАСТА" (Левая часть) ---
-// Где 1-й элемент - от какого места, 2-й - до какого (включительно)
 const tanci_parterre = {
-  1: [19, 39], 2: [18, 37], 3: [18, 37], 4: [17, 35], 5: [10, 20], 
-  6: [17, 35], 7: [15, 31], 8: [16, 33], 9: [15, 32], 10: [14, 30], 
-  11: [14, 30], 12: [14, 29], 13: [14, 29], 14: [14, 29], 15: [14, 29], 
-  16: [14, 28], 17: [14, 28], 18: [13, 27], 19: [11, 19], 20: [11, 19], 21: [11, 19],
-  // 22-25 ряды: делим пополам
-  22: [15, 30], 23: [10, 20], 24: [9, 17], 25: [10, 19]
+  1: [19, 39], 2: [18, 37], 3: [18, 37], 4: [17, 35], 5: [10, 20], 6: [17, 35], 7: [15, 31], 8: [16, 33], 9: [15, 32], 10: [14, 30], 
+  11: [14, 30], 12: [14, 29], 13: [14, 29], 14: [14, 29], 15: [14, 29], 16: [14, 28], 17: [14, 28], 18: [13, 27], 19: [11, 19], 20: [11, 19], 
+  21: [11, 19], 22: [15, 30], 23: [10, 20], 24: [9, 17], 25: [10, 19]
 };
-
-const tanci_central = {
-  1: [14, 27], 2: [14, 28], 3: [15, 30], 4: [16, 31], 5: [15, 28]
-};
+const tanci_central = { 1: [14, 27], 2: [14, 28], 3: [15, 30], 4: [16, 31], 5: [15, 28] };
 
 function getEventSide(zone, row, seatNum) {
   if (zone.includes('left-balc')) return 'left';
   if (zone.includes('right-balc')) return 'right';
-  
   if (zone === 'central') {
     const range = tanci_central[row];
     if (range && seatNum >= range[0] && seatNum <= range[1]) return 'left';
     return 'right';
   }
-  
   if (zone === 'parterre') {
     const range = tanci_parterre[row];
     if (range && seatNum >= range[0] && seatNum <= range[1]) return 'left';
     return 'right';
   }
-  return 'left'; // fallback
+  return 'left';
 }
 
-// Балконы (генерация)
 function generateBalcGrid(cols, totalRows, colConfigs) {
   const grid = Array(totalRows).fill(null).map(() => Array(cols).fill(null));
   let seatCounters = Array(cols).fill(1);
@@ -328,10 +272,7 @@ const rightBalcBGrid = generateBalcGrid(2, 20, [{present:(r)=>(r>=0&&r<=5)||r>=9
 
 function parseRow(str, maxSeat) {
   const row = [];
-  let seatNum = maxSeat;
-  let aisleWidth = 0;
-  let djCount = 0;
-  
+  let seatNum = maxSeat, aisleWidth = 0, djCount = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str[i];
     if (char === '0') {
@@ -351,34 +292,28 @@ function parseRow(str, maxSeat) {
   return row;
 }
 
+// ЛОГИКА ЦВЕТОВ ИЗ НАСТРОЕК АДМИНА
 function getPriceAndColor(zone, row) {
-  let price = 600, color = '#60a5fa'; 
-  if (zone.includes('parterre')) {
-    if (row === 1) { price = 1500; color = '#ef4444'; }
-    else if (row === 2) { price = 1400; color = '#fca5a5'; }
-    else if (row === 3) { price = 1300; color = '#f97316'; }
-    else if (row >= 4 && row <= 7) { price = 1100; color = '#eab308'; }
-    else if (row >= 8 && row <= 12) { price = 1000; color = '#22c55e'; }
-    else if (row >= 13 && row <= 17) { price = 800; color = '#86efac'; }
+  let config = priceSettings[zone] || priceSettings['parterre'] || {};
+  let rowData = config[row];
+  if (!rowData) {
+    for (let key in config) {
+      if (key.includes('-')) {
+        const [min, max] = key.split('-').map(Number);
+        if (row >= min && row <= max) { rowData = config[key]; break; }
+      }
+    }
   }
-  return { price, color };
+  if (!rowData) rowData = config['default'] || { price: 600, color: '#60a5fa' };
+  return { price: rowData.price, color: rowData.color };
 }
 
 function createSeat(key, num, title, color, price, side, zoneName, rowNum) {
   const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'seat';
-  btn.dataset.key = key;
-  btn.dataset.side = side; 
-  btn.dataset.zone = zoneName;
-  btn.dataset.row = rowNum;
-  btn.dataset.seat = num;
-  btn.dataset.price = price;
-  btn.textContent = num;
+  btn.type = 'button'; btn.className = 'seat'; btn.dataset.key = key; btn.dataset.side = side; btn.dataset.zone = zoneName;
+  btn.dataset.row = rowNum; btn.dataset.seat = num; btn.dataset.price = price; btn.textContent = num;
   btn.style.background = color;
-
   if (side !== currentEvent) btn.classList.add('disabled');
-  
   if (bookedSet.has(key)) {
     if (bookedSet.has(key + '_blocked')) btn.classList.add('blocked');
     else btn.classList.add('booked');
@@ -396,15 +331,10 @@ function switchEvent(event) {
 }
 
 function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isParterre = false) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  container.innerHTML = '';
-  
+  const container = document.getElementById(containerId); if (!container) return; container.innerHTML = '';
   gridData.forEach((rowData, rowIndex) => {
     const rowNum = rowIndex + 1;
-    const rowDiv = document.createElement('div');
-    rowDiv.className = 'row';
-
+    const rowDiv = document.createElement('div'); rowDiv.className = 'row';
     const { price, color } = getPriceAndColor(prefix, rowNum);
 
     rowData.forEach(item => {
@@ -415,11 +345,7 @@ function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isPart
           const side = getEventSide(prefix, rowNum, item.num);
           rowDiv.appendChild(createSeat(`${prefix}-${rowNum}-${item.num}`, item.num, `${zoneName} Ряд ${rowNum} Место ${item.num}`, color, price, side, zoneName, rowNum));
         } else if (item.type === 'dj') {
-          // Диджейка занимает ровно столько места, сколько символов 'д' (6 шт * 24px)
-          const dj = document.createElement('div'); dj.className = 'dj-booth'; 
-          dj.style.width = `${item.width * 24}px`; 
-          dj.textContent = 'DJ'; 
-          rowDiv.appendChild(dj);
+          const dj = document.createElement('div'); dj.className = 'dj-booth'; dj.style.width = `${item.width * 24}px`; dj.textContent = 'DJ'; rowDiv.appendChild(dj);
         }
       } else {
         if (item === null) {
@@ -437,7 +363,6 @@ function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isPart
 function render() {
   const parterreData = parterreStrings.map((s, i) => parseRow(s, parterreMaxSeats[i]));
   renderGrid('parterre', parterreData, 'parterre', 'Партер', null, true);
-  
   const centralData = centralStrings.map((s, i) => parseRow(s, centralMaxSeats[i]));
   renderGrid('central-balc', centralData, 'central', 'Центральный балкон', null, true);
   
@@ -447,11 +372,53 @@ function render() {
   renderGrid('right-balc-a', rightBalcAGrid, 'right-balc-a', 'Правый балкон А', 'right');
   
   updateBar();
+  renderLegend();
+}
+
+function renderLegend() {
+  const legendDiv = document.getElementById('priceLegend');
+  legendDiv.innerHTML = '';
+  const defaultCfg = priceSettings['parterre'] || {};
+  const colors = new Set();
+  
+  for (let key in defaultCfg) {
+    if (key === 'default') continue;
+    const c = defaultCfg[key].color;
+    if (!colors.has(c)) {
+      colors.add(c);
+      legendDiv.innerHTML += `<span><i class="dot" style="background:${c}"></i>${defaultCfg[key].price}₽</span>`;
+    }
+  }
+  if (defaultCfg['default'] && !colors.has(defaultCfg['default'].color)) {
+    legendDiv.innerHTML += `<span><i class="dot" style="background:${defaultCfg['default'].color}"></i>${defaultCfg['default'].price}₽</span>`;
+  }
 }
 
 function updateBar(){
   document.getElementById('count').textContent = selected.size;
   document.getElementById('bookBtn').disabled = selected.size === 0;
+}
+
+async function loadSettings() {
+  try {
+    const res = await fetch('/api/settings');
+    priceSettings = await res.json();
+    if (!priceSettings || Object.keys(priceSettings).length === 0) {
+      // Дефолтные настройки, если в базе пусто
+      priceSettings = {
+        parterre: {
+          "1": { "price": 1500, "color": "#ef4444" },
+          "2": { "price": 1400, "color": "#fca5a5" },
+          "3": { "price": 1300, "color": "#f97316" },
+          "4-7": { "price": 1100, "color": "#eab308" },
+          "8-12": { "price": 1000, "color": "#22c55e" },
+          "13-17": { "price": 800, "color": "#86efac" },
+          "default": { "price": 600, "color": "#60a5fa" }
+        }
+      };
+    }
+    render();
+  } catch (e) { console.error('Ошибка загрузки настроек'); }
 }
 
 async function loadBookings(){
@@ -473,39 +440,23 @@ async function loadBookings(){
   } catch (e) { render(); }
 }
 
-// ==== TOOLTIP ЛОГИКА ====
 const tooltip = document.getElementById('tooltip');
-
 document.body.addEventListener('mouseover', e => {
-  const btn = e.target.closest('.seat');
-  if (!btn) return;
-  
-  const zone = btn.dataset.zone;
-  const row = btn.dataset.row;
-  const seat = btn.dataset.seat;
-  const price = btn.dataset.price;
-
-  document.getElementById('tt-row').textContent = `ряд: ${row}, место: ${seat}`;
-  document.getElementById('tt-zone').textContent = zone;
-  document.getElementById('tt-price').textContent = `${price} руб.`;
-  
+  const btn = e.target.closest('.seat'); if (!btn) return;
+  document.getElementById('tt-row').textContent = `ряд: ${btn.dataset.row}, место: ${btn.dataset.seat}`;
+  document.getElementById('tt-zone').textContent = btn.dataset.zone;
+  document.getElementById('tt-price').textContent = `${btn.dataset.price} руб.`;
   tooltip.style.display = 'block';
 });
-
 document.body.addEventListener('mousemove', e => {
   if (tooltip.style.display === 'block') {
-    tooltip.style.left = e.clientX + 'px';
-    tooltip.style.top = e.clientY + 'px';
+    tooltip.style.left = e.clientX + 'px'; tooltip.style.top = e.clientY + 'px';
   }
 });
-
 document.body.addEventListener('mouseout', e => {
-  if (e.target.closest('.seat')) {
-    tooltip.style.display = 'none';
-  }
+  if (e.target.closest('.seat')) tooltip.style.display = 'none';
 });
 
-// ==== КЛИКИ И ОСТАЛЬНАЯ ЛОГИКА ====
 document.body.addEventListener('click', async e => {
   const btn = e.target.closest('.seat');
   if (!btn || btn.classList.contains('booked') || btn.classList.contains('disabled')) return;
@@ -521,12 +472,10 @@ document.body.addEventListener('click', async e => {
   }
 
   if (selected.has(key)) {
-    selected.delete(key);
-    btn.classList.remove('selected');
+    selected.delete(key); btn.classList.remove('selected');
   } else {
     if (selected.size >= MAX_SEATS) return showToast(`Не более ${MAX_SEATS} мест`);
-    selected.add(key);
-    btn.classList.add('selected');
+    selected.add(key); btn.classList.add('selected');
   }
   updateBar();
 });
@@ -534,11 +483,9 @@ document.body.addEventListener('click', async e => {
 async function toggleBlock(seatKey) {
   try {
     const res = await fetch(`/api/admin/toggle-block?pass=${ADMIN_PASSWORD}`, {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ seat: seatKey })
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ seat: seatKey })
     });
-    if (res.ok) loadBookings();
-    else { const d = await res.json(); alert(d.error); }
+    if (res.ok) loadBookings(); else { const d = await res.json(); alert(d.error); }
   } catch (e) { alert('Ошибка сети'); }
 }
 
@@ -547,6 +494,7 @@ document.getElementById('adminBtn').addEventListener('click', () => {
     isAdminMode = false;
     document.getElementById('adminBtn').classList.remove('active');
     document.getElementById('adminBtn').textContent = 'Войти как Админ';
+    document.getElementById('settingsBtn').style.display = 'none';
     showToast('Режим админа выключен');
   } else {
     const pass = prompt('Введите пароль:');
@@ -554,11 +502,41 @@ document.getElementById('adminBtn').addEventListener('click', () => {
       isAdminMode = true;
       document.getElementById('adminBtn').classList.add('active');
       document.getElementById('adminBtn').textContent = 'Выйти из Админа';
+      document.getElementById('settingsBtn').style.display = 'inline-block';
       showToast('Кликайте по местам для блокировки');
     } else if (pass !== null) alert('Неверный пароль');
   }
 });
 
+// НАСТРОЙКИ ЦЕН
+function openSettings() {
+  document.getElementById('settingsJson').value = JSON.stringify(priceSettings, null, 2);
+  document.getElementById('settingsError').textContent = '';
+  document.getElementById('settingsModal').hidden = false;
+}
+
+async function saveSettings() {
+  const jsonStr = document.getElementById('settingsJson').value;
+  const errorEl = document.getElementById('settingsError');
+  try {
+    const parsed = JSON.parse(jsonStr);
+    const res = await fetch(`/api/admin/settings?pass=${ADMIN_PASSWORD}`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(parsed)
+    });
+    if (res.ok) {
+      priceSettings = parsed;
+      document.getElementById('settingsModal').hidden = true;
+      render();
+      showToast('Настройки сохранены!');
+    } else {
+      errorEl.textContent = 'Ошибка сервера';
+    }
+  } catch (e) {
+    errorEl.textContent = 'Неверный формат JSON. Проверьте скобки и кавычки.';
+  }
+}
+
+// БРОНИРОВАНИЕ
 document.getElementById('bookBtn').addEventListener('click', () => {
   if (!selected.size) return;
   document.getElementById('modalSeats').textContent = seatsText();
@@ -571,14 +549,10 @@ document.getElementById('bookBtn').addEventListener('click', () => {
 function seatsText(){
   const groups = {};
   for (const key of selected){
-    let parts = key.split('-');
-    let zone = 'Балкон';
-    let r = parts[parts.length-2]; let c = parts[parts.length-1];
-    
+    let parts = key.split('-'); let zone = 'Балкон'; let r = parts[parts.length-2]; let c = parts[parts.length-1];
     if (parts[0] === 'parterre') { zone = 'Партер'; r = parts[1]; c = parts[2]; }
     else if (parts[0] === 'central') { zone = 'Центр. балкон'; r = parts[1]; c = parts[2]; }
     else if (parts[1] === 'balc') { zone = parts[0] === 'left' ? 'Левый балкон' : 'Правый балкон'; r = parts[2]; c = parts[3]; }
-
     if(!groups[`${zone} Ряд ${r}`]) groups[`${zone} Ряд ${r}`] = [];
     groups[`${zone} Ряд ${r}`].push(Number(c));
   }
@@ -587,37 +561,17 @@ function seatsText(){
 
 document.getElementById('bookingForm').addEventListener('submit', async e => {
   e.preventDefault();
-  const errorEl = document.getElementById('error');
-  errorEl.textContent = '';
-  const fullname = document.getElementById('fullname').value.trim();
-  const phone = document.getElementById('phone').value.trim();
-  
+  const errorEl = document.getElementById('error'); errorEl.textContent = '';
+  const fullname = document.getElementById('fullname').value.trim(); const phone = document.getElementById('phone').value.trim();
   if (fullname.length < 2) { errorEl.textContent = 'Введите имя'; return; }
   if (phone.replace(/\D/g,'').length < 10) { errorEl.textContent = 'Введите телефон'; return; }
-
-  const submitBtn = document.getElementById('submitBtn');
-  submitBtn.disabled = true; submitBtn.textContent = '...';
-
+  const submitBtn = document.getElementById('submitBtn'); submitBtn.disabled = true; submitBtn.textContent = '...';
   try {
-    const res = await fetch('/api/bookings', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ seats: [...selected], fullname, phone })
-    });
+    const res = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seats: [...selected], fullname, phone }) });
     const data = await res.json();
-    if (!res.ok) {
-      errorEl.textContent = data.error;
-      if (res.status === 409) await loadBookings();
-      return;
-    }
-    selected.clear();
-    document.getElementById('modal').hidden = true;
-    loadBookings();
-    showToast('Успешно забронировано!');
-  } catch (err) {
-    errorEl.textContent = 'Ошибка сети';
-  } finally {
-    submitBtn.disabled = false; submitBtn.textContent = 'Забронировать';
-  }
+    if (!res.ok) { errorEl.textContent = data.error; if (res.status === 409) await loadBookings(); return; }
+    selected.clear(); document.getElementById('modal').hidden = true; loadBookings(); showToast('Успешно забронировано!');
+  } catch (err) { errorEl.textContent = 'Ошибка сети'; } finally { submitBtn.disabled = false; submitBtn.textContent = 'Забронировать'; }
 });
 
 document.getElementById('cancelBtnOpen').addEventListener('click', () => {
@@ -630,12 +584,9 @@ async function findMyBookings() {
   const res = await fetch('/api/my-bookings?phone=' + phone);
   const seats = await res.json();
   if (!seats || seats.length === 0) return alert('Не найдено');
-  
-  const container = document.getElementById('seatsToCancel');
-  container.innerHTML = ''; cancelSeats.clear();
+  const container = document.getElementById('seatsToCancel'); container.innerHTML = ''; cancelSeats.clear();
   seats.forEach(s => {
-    const b = document.createElement('button');
-    b.className = 'btn ghost'; b.textContent = s;
+    const b = document.createElement('button'); b.className = 'btn ghost'; b.textContent = s;
     b.onclick = () => {
       if (cancelSeats.has(s)) { cancelSeats.delete(s); b.style.background=''; }
       else { cancelSeats.add(s); b.style.background='#d9534f'; }
@@ -656,7 +607,8 @@ async function cancelBookings() {
 let toastTimer;
 function showToast(msg){ document.getElementById('toast').textContent=msg; document.getElementById('toast').classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>document.getElementById('toast').classList.remove('show'),2500); }
 
-render();
+// ЗАПУСК
+loadSettings();
 loadBookings();
 setInterval(loadBookings, POLL_MS);
 </script>
