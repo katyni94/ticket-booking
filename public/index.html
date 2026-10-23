@@ -33,7 +33,18 @@
   .row { display: flex; gap: 4px; justify-content: center; margin-bottom: 4px; min-height: 20px; }
   
   .aisle { height: 20px; flex-shrink: 0; } 
-  .dj-booth { height: 20px; background: #333; border: 1px solid #555; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #aaa; }
+  
+  /* Блоки (Диджейка и Барьер) */
+  .dj-booth, .wall-block { 
+    height: 20px; 
+    background: #1f2633; 
+    border: 1px solid #3b465c; 
+    border-radius: 4px; 
+    display: flex; align-items: center; justify-content: center; 
+    font-size: 10px; font-weight: bold; color: #aaa; 
+    flex-shrink: 0;
+  }
+  .wall-block { border-style: dashed; background: #151b24; }
 
   .seat{
     width: 20px; height: 20px; border:0; border-radius:4px 4px 1px 1px;
@@ -342,7 +353,18 @@ function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isPart
     rowData.forEach(item => {
       if (isParterre) {
         if (item.type === 'aisle') {
-          const a = document.createElement('div'); a.className = 'aisle'; a.style.width = `${item.width * 4.5}px`; rowDiv.appendChild(a);
+          const a = document.createElement('div'); 
+          
+          // ЛОГИКА РАЗРЫВА В ЦЕНТРАЛЬНОМ БАЛКОНЕ
+          if (prefix === 'central' && item.width === 4) {
+            a.className = 'wall-block'; 
+            a.style.width = `${item.width * 24}px`; // Делаем блок шириной ровно как 4 места
+          } else {
+            a.className = 'aisle'; 
+            a.style.width = `${item.width * (prefix === 'central' ? 12 : 4.5)}px`; 
+          }
+          rowDiv.appendChild(a);
+
         } else if (item.type === 'seat') {
           const side = getEventSide(prefix, rowNum, item.num);
           rowDiv.appendChild(createSeat(`${prefix}-${rowNum}-${item.num}`, item.num, `${zoneName} Ряд ${rowNum} Место ${item.num}`, color, price, side, zoneName, rowNum));
