@@ -69,12 +69,10 @@
   /* Модалки */
   .modal{position:fixed; inset:0; z-index:200; background:rgba(5,8,12,.8); display:flex; align-items:center; justify-content:center; padding:16px}
   .modal[hidden]{display:none}
-  .modal-card{background:var(--panel); border-radius:16px; padding:24px; width:100%; max-width:450px;}
+  .modal-card{background:var(--panel); border-radius:16px; padding:24px; width:100%; max-width:550px;}
   .modal-card h2{margin-top:0;}
   .modal-seats{color:var(--muted); font-size:13px; white-space:pre-line; margin:0 0 15px; line-height:1.5}
   input[type="text"], input[type="tel"]{width:100%; margin-top:5px; margin-bottom:15px; padding:11px; border-radius:8px; border:1px solid #2a3446; background:#111721; color:var(--text); font-family:monospace;}
-  input[type="number"]{width:70px; padding:6px; border-radius:6px; border:1px solid #2a3446; background:#111721; color:var(--text); margin:0;}
-  input[type="color"]{width:40px; height:30px; padding:0; border:none; border-radius:4px; background:none; cursor:pointer; vertical-align:middle;}
   .error{color:#f87171; font-size:13px; margin-top:10px; min-height:16px;}
   
   .toast{position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#1a8a4d; color:#fff; padding:10px 20px; border-radius:8px; opacity:0; transition:.3s; pointer-events:none; z-index:300;}
@@ -182,12 +180,21 @@
   <div class="modal-card" style="max-height: 90vh; overflow-y: auto;">
     <h2>Настройки цен</h2>
     <p style="font-size:12px; color:var(--muted); margin-bottom:15px;">
-      Укажите цену и цвет для каждого ряда. Остальные места (балконы) используют базовую цену.
+      Настройте базовую цену и добавьте правила для отдельных мест или рядов.
     </p>
     
-    <div id="settingsRowsList" style="padding-right:10px;">
-      <!-- Сюда будут добавляться строки -->
+    <div style="background:#1f2937; padding:15px; margin-bottom:15px; border-radius:8px;">
+      <div style="font-weight:bold; margin-bottom:10px;">Цена по умолчанию (Балконы)</div>
+      <div style="display:flex; align-items:center; gap:15px;">
+        <label style="margin:0;">Цена: <input type="number" id="set-default-price" style="width:70px; padding:6px; border-radius:6px; border:1px solid #2a3446; background:#111721; color:var(--text); margin:0;"></label>
+        <label style="margin:0;">Цвет: <input type="color" id="set-default-color" style="width:40px; height:30px; padding:0; border:none; border-radius:4px; background:none; cursor:pointer;"></label>
+      </div>
     </div>
+
+    <div style="font-weight:bold; margin:15px 0 10px; font-size:15px;">Специальные правила</div>
+    <div id="rules-container" style="display:flex; flex-direction:column; gap:8px;"></div>
+    
+    <button type="button" class="btn ghost" style="width:100%; margin-top:15px; border:1px dashed #555;" onclick="addRuleRow()">+ Добавить правило</button>
 
     <div style="display:flex; gap:10px; margin-top:20px; position:sticky; bottom:-24px; background:var(--panel); padding:15px 0;">
       <button type="button" class="btn ghost" style="flex:1" onclick="document.getElementById('settingsModal').hidden = true">Отмена</button>
@@ -231,11 +238,9 @@ const parterreStrings = [
 const parterreMaxSeats = [39, 37, 37, 35, 20, 35, 31, 33, 32, 30, 30, 29, 29, 29, 29, 28, 28, 27, 19, 19, 19, 30, 20, 17, 19];
 
 const centralStrings = [
-  "---------000000000000000000000000000----------", // 1 (27 мест)
-  "--------0000000000000000000000000000----------", // 2 (28 мест)
-  "-------00000000000000000000000000000----------", // 3 (30 мест)
-  "-------000000000000000000000000000000----------", // 4 (31 мест)
-  "-------00000000000000----00000000000000----------"  // 5 (28 мест, с разрывом)
+  "---------000000000000000000000000000----------", "--------0000000000000000000000000000----------",
+  "-------00000000000000000000000000000----------", "-------000000000000000000000000000000----------",
+  "-------00000000000000----00000000000000----------"
 ];
 const centralMaxSeats = [27, 28, 30, 31, 28];
 
@@ -299,15 +304,16 @@ function parseRow(str, maxSeat) {
   return row;
 }
 
-function getPriceAndColor(zone, row) {
-  let config;
-  if (zone === 'parterre') config = priceSettings['parterre'] || {};
-  else if (zone === 'central') config = priceSettings['central'] || {};
-  else config = { "default": (priceSettings['parterre'] || {})['default'] || { price: 600, color: '#60a5fa' } };
-  
-  let rowData = config[row];
-  if (!rowData) rowData = config['default'] || { price: 600, color: '#60a5fa' };
-  return { price: rowData.price, color: rowData.color };
+// НОВАЯ ЛОГИКА ЦВЕТОВ (проверяет правила)
+function getPriceAndColor(zone, row, seatNum) {
+  if (priceSettings.rules) {
+    for (let r of priceSettings.rules) {
+      if (r.zone === zone && row == r.row && seatNum >= r.start && seatNum <= r.end) {
+        return { price: r.price, color: r.color };
+      }
+    }
+  }
+  return priceSettings['default'] || { price: 600, color: '#60a5fa' };
 }
 
 function createSeat(key, num, title, color, price, side, zoneName, rowNum) {
@@ -340,26 +346,21 @@ function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isPart
     const rowDiv = document.createElement('div'); 
     rowDiv.className = 'row';
     
-    if (prefix === 'parterre' && rowNum === 21) {
-      rowDiv.style.marginBottom = '30px'; // Большой проход между 21 и 22 рядом
-    }
-
-    const { price, color } = getPriceAndColor(prefix, rowNum);
+    if (prefix === 'parterre' && rowNum === 21) rowDiv.style.marginBottom = '30px'; 
 
     rowData.forEach(item => {
       if (isParterre) {
         if (item.type === 'aisle') {
           const a = document.createElement('div'); 
           if (prefix === 'central' && item.width === 4) {
-            a.className = 'wall-block'; 
-            a.style.width = `${item.width * 24}px`;
+            a.className = 'wall-block'; a.style.width = `${item.width * 24}px`;
           } else {
-            a.className = 'aisle'; 
-            a.style.width = `${item.width * (prefix === 'central' ? 12 : 4.5)}px`; 
+            a.className = 'aisle'; a.style.width = `${item.width * (prefix === 'central' ? 12 : 4.5)}px`; 
           }
           rowDiv.appendChild(a);
         } else if (item.type === 'seat') {
           const side = getEventSide(prefix, rowNum, item.num);
+          const { price, color } = getPriceAndColor(prefix, rowNum, item.num); // Передаем item.num
           rowDiv.appendChild(createSeat(`${prefix}-${rowNum}-${item.num}`, item.num, `${zoneName} Ряд ${rowNum} Место ${item.num}`, color, price, side, zoneName, rowNum));
         } else if (item.type === 'dj') {
           const dj = document.createElement('div'); dj.className = 'dj-booth'; dj.style.width = `${item.width * 24}px`; dj.textContent = 'DJ'; rowDiv.appendChild(dj);
@@ -369,6 +370,7 @@ function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isPart
           const a = document.createElement('div'); a.className = 'aisle'; a.style.width = '20px'; rowDiv.appendChild(a);
         } else {
           let side = defaultSide || getEventSide(prefix, rowNum, item.num);
+          const { price, color } = getPriceAndColor('balcon', rowNum, item.num); // Балконы берут дефолт
           rowDiv.appendChild(createSeat(`${prefix}-${rowNum}-${item.num}`, item.num, `${zoneName} Ряд ${rowNum} Место ${item.num}`, color, price, side, zoneName, rowNum));
         }
       }
@@ -395,19 +397,18 @@ function render() {
 function renderLegend() {
   const legendDiv = document.getElementById('priceLegend');
   legendDiv.innerHTML = '';
-  const defaultCfg = priceSettings['parterre'] || {};
   const colors = new Set();
   
-  for (let key in defaultCfg) {
-    if (key === 'default') continue;
-    const c = defaultCfg[key].color;
-    if (!colors.has(c)) {
-      colors.add(c);
-      legendDiv.innerHTML += `<span><i class="dot" style="background:${c}"></i>${defaultCfg[key].price}₽</span>`;
-    }
+  if (priceSettings.rules) {
+    priceSettings.rules.forEach(r => {
+      if (!colors.has(r.color)) {
+        colors.add(r.color);
+        legendDiv.innerHTML += `<span><i class="dot" style="background:${r.color}"></i>${r.price}₽</span>`;
+      }
+    });
   }
-  if (defaultCfg['default'] && !colors.has(defaultCfg['default'].color)) {
-    legendDiv.innerHTML += `<span><i class="dot" style="background:${defaultCfg['default'].color}"></i>${defaultCfg['default'].price}₽</span>`;
+  if (priceSettings.default && !colors.has(priceSettings.default.color)) {
+    legendDiv.innerHTML += `<span><i class="dot" style="background:${priceSettings.default.color}"></i>${priceSettings.default.price}₽</span>`;
   }
 }
 
@@ -421,8 +422,7 @@ async function loadSettings() {
     const res = await fetch('/api/settings');
     priceSettings = await res.json();
     if (!priceSettings || Object.keys(priceSettings).length === 0) {
-      // Инициализация пустой структуры
-      priceSettings = { parterre: {}, central: {} };
+      priceSettings = { default: { price: 600, color: '#60a5fa' }, rules: [] };
     }
     render();
   } catch (e) { console.error('Ошибка загрузки настроек'); }
@@ -523,86 +523,65 @@ document.getElementById('adminBtn').addEventListener('click', () => {
   }
 });
 
-// ВИЗУАЛЬНЫЕ НАСТРОЙКИ ЦЕН
+// НАСТРОЙКИ ЦЕН С ПРАВИЛАМИ
 function openSettings() {
-  const container = document.getElementById('settingsRowsList');
+  const container = document.getElementById('rules-container');
   container.innerHTML = '';
   
-  const parterreConf = priceSettings['parterre'] || {};
-  const centralConf = priceSettings['central'] || {};
-  
-  // Базовая цена
-  let def = parterreConf['default'] || { price: 600, color: '#60a5fa' };
-  container.innerHTML += `
-    <div style="background:#1f2937; padding:15px; margin-bottom:15px; border-radius:8px;">
-      <div style="font-weight:bold; margin-bottom:10px;">По умолчанию (Балконы)</div>
-      <div style="display:flex; align-items:center; gap:15px;">
-        <label style="margin:0;">Цена: <input type="number" id="set-default-price" value="${def.price}"></label>
-        <label style="margin:0;">Цвет: <input type="color" id="set-default-color" value="${def.color}"></label>
-      </div>
-    </div>
-  `;
+  let def = priceSettings.default || { price: 600, color: '#60a5fa' };
+  document.getElementById('set-default-price').value = def.price;
+  document.getElementById('set-default-color').value = def.color;
 
-  // Партер
-  container.innerHTML += `<div style="font-weight:bold; margin:15px 0 10px; font-size:15px;">Партер (Ряды 1-25)</div>`;
-  for (let r = 1; r <= 25; r++) {
-     let rowData = parterreConf[r] || def;
-     container.innerHTML += `
-       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #2a3446;">
-         <span style="font-size:14px; color:#ccc;">Ряд ${r}</span>
-         <div style="display:flex; align-items:center; gap:10px;">
-           <input type="number" id="set-p-${r}-price" value="${rowData.price}">
-           <input type="color" id="set-p-${r}-color" value="${rowData.color}">
-         </div>
-       </div>
-     `;
-  }
-
-  // Центральный балкон
-  container.innerHTML += `<div style="font-weight:bold; margin:20px 0 10px; font-size:15px;">Центральный балкон (Ряды 1-5)</div>`;
-  for (let r = 1; r <= 5; r++) {
-     let rowData = centralConf[r] || def;
-     container.innerHTML += `
-       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #2a3446;">
-         <span style="font-size:14px; color:#ccc;">Ряд ${r}</span>
-         <div style="display:flex; align-items:center; gap:10px;">
-           <input type="number" id="set-c-${r}-price" value="${rowData.price}">
-           <input type="color" id="set-c-${r}-color" value="${rowData.color}">
-         </div>
-       </div>
-     `;
-  }
-  
+  (priceSettings.rules || []).forEach(r => addRuleRow(r));
   document.getElementById('settingsError').textContent = '';
   document.getElementById('settingsModal').hidden = false;
+}
+
+function addRuleRow(rule = { zone: 'parterre', row: 1, start: 1, end: 39, price: 1500, color: '#ef4444' }) {
+  const container = document.getElementById('rules-container');
+  const div = document.createElement('div');
+  div.className = 'rule-row';
+  div.style = "display:flex; gap:5px; margin-bottom:8px; align-items:center; background:#111721; padding:8px; border-radius:6px; flex-wrap:wrap;";
+  
+  div.innerHTML = `
+    <select class="r-zone" style="padding:6px; border-radius:4px; background:#2a3446; color:#fff; border:none;">
+      <option value="parterre" ${rule.zone==='parterre'?'selected':''}>Партер</option>
+      <option value="central" ${rule.zone==='central'?'selected':''}>ЦБ</option>
+    </select>
+    <input type="number" class="r-row" placeholder="Ряд" value="${rule.row}" style="width:50px; padding:6px; border-radius:4px; background:#2a3446; color:#fff; border:none;">
+    <span style="color:#aaa; font-size:12px;">с</span>
+    <input type="number" class="r-start" placeholder="От" value="${rule.start}" style="width:45px; padding:6px; border-radius:4px; background:#2a3446; color:#fff; border:none;">
+    <span style="color:#aaa; font-size:12px;">по</span>
+    <input type="number" class="r-end" placeholder="До" value="${rule.end}" style="width:45px; padding:6px; border-radius:4px; background:#2a3446; color:#fff; border:none;">
+    <input type="number" class="r-price" placeholder="Цена" value="${rule.price}" style="width:65px; padding:6px; border-radius:4px; background:#2a3446; color:#fff; border:none;">
+    <input type="color" class="r-color" value="${rule.color}" style="width:30px; height:30px; padding:0; border:none; border-radius:4px; background:none; cursor:pointer;">
+    <button type="button" class="btn ghost" style="padding:4px 8px; background:#d9534f; color:white;" onclick="this.parentNode.remove()">X</button>
+  `;
+  container.appendChild(div);
 }
 
 async function saveSettings() {
   const errorEl = document.getElementById('settingsError');
   try {
-    const newSettings = { parterre: {}, central: {} };
-    
-    // По умолчанию
-    newSettings.parterre['default'] = {
+    const rules = [];
+    document.querySelectorAll('.rule-row').forEach(row => {
+      rules.push({
+        zone: row.querySelector('.r-zone').value,
+        row: Number(row.querySelector('.r-row').value),
+        start: Number(row.querySelector('.r-start').value),
+        end: Number(row.querySelector('.r-end').value),
+        price: Number(row.querySelector('.r-price').value),
+        color: row.querySelector('.r-color').value
+      });
+    });
+
+    const newSettings = {
+      default: {
         price: Number(document.getElementById('set-default-price').value) || 600,
         color: document.getElementById('set-default-color').value
+      },
+      rules: rules
     };
-    
-    // Партер
-    for (let r = 1; r <= 25; r++) {
-        newSettings.parterre[r] = {
-            price: Number(document.getElementById(`set-p-${r}-price`).value) || 600,
-            color: document.getElementById(`set-p-${r}-color`).value
-        };
-    }
-    
-    // Центральный
-    for (let r = 1; r <= 5; r++) {
-        newSettings.central[r] = {
-            price: Number(document.getElementById(`set-c-${r}-price`).value) || 600,
-            color: document.getElementById(`set-c-${r}-color`).value
-        };
-    }
 
     const res = await fetch(`/api/admin/settings?pass=${ADMIN_PASSWORD}`, {
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newSettings)
@@ -622,7 +601,6 @@ async function saveSettings() {
   }
 }
 
-// БРОНИРОВАНИЕ
 document.getElementById('bookBtn').addEventListener('click', () => {
   if (!selected.size) return;
   document.getElementById('modalSeats').textContent = seatsText();
