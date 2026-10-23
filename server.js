@@ -5,7 +5,7 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MAX_SEATS_PER_PERSON = 4;
-const ADMIN_PASSWORD = "admin123"; // Пароль для админки
+const ADMIN_PASSWORD = "admin123"; // Пароль для админки и блокировки мест
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -17,11 +17,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 async function initDB() {
   try {
+    // Добавлена колонка status
     await pool.query(`
       CREATE TABLE IF NOT EXISTS bookings (
-        seat_key VARCHAR(20) PRIMARY KEY,
-        fullname VARCHAR(100) NOT NULL,
-        phone VARCHAR(30) NOT NULL,
+        seat_key VARCHAR(50) PRIMARY KEY,
+        fullname VARCHAR(100),
+        phone VARCHAR(30),
+        status VARCHAR(20) DEFAULT 'booked',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -37,25 +39,23 @@ function normalizePhone(phone) {
   return d.length > 10 ? d.slice(-10) : d;
 }
 
-// --- ПОЛУЧЕНИЕ ЗАНЯТЫХ МЕСТ ---
+// Отдаем клиентам ключи и статусы (booked или blocked)
 app.get('/api/bookings', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT seat_key FROM bookings');
-    res.json(rows.map(r => r.seat_key));
+    const { rows } = await pool.query('SELECT seat_key, status FROM bookings');
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: 'Ошибка базы данных' });
   }
 });
 
-// --- ПРОВЕРКА ЛИМИТА ПО ТЕЛЕФОНУ ---
 app.get('/api/limit', async (req, res) => {
   const phone = req.query.phone;
   if (!phone) return res.status(400).json({ error: 'Телефон обязателен' });
-  
   try {
     const normPhone = normalizePhone(phone);
     const { rows } = await pool.query(
-      "SELECT COUNT(*) as count FROM bookings WHERE RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $1",
+      "SELECT COUNT(*) as count FROM bookings WHERE RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $1 AND status = 'booked'",
       [normPhone]
     );
     const used = parseInt(rows[0].count, 10);
@@ -65,14 +65,11 @@ app.get('/api/limit', async (req, res) => {
   }
 });
 
-// --- БРОНИРОВАНИЕ ---
 app.post('/api/bookings', async (req, res) => {
   const { seats, fullname, phone } = req.body || {};
 
-  if (!Array.isArray(seats) || seats.length === 0) {
-    return res.status(400).json({ error: 'Не выбраны места' });
-  }
-
+  if (!Array.isArray(seats) || seats.length === 0) return res.status(400).json({ error: 'Не выбраны места' });
+  
   const digits = String(phone || '').replace(/\D/g, '');
   if (typeof fullname !== 'string' || fullname.trim().length < 2 || digits.length < 10) {
     return res.status(400).json({ error: 'Проверьте имя и телефон' });
@@ -88,51 +85,47 @@ app.post('/api/bookings', async (req, res) => {
     );
     if (existing.length > 0) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Эти места только что забронировал кто-то другой. Обновите страницу.' });
+      return res.status(409).json({ error: 'Эти места уже заняты или заблокированы. Обновите страницу.' });
     }
 
     const normPhone = normalizePhone(phone);
     const { rows: countRows } = await client.query(
-      "SELECT COUNT(*) as count FROM bookings WHERE RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $1",
+      "SELECT COUNT(*) as count FROM bookings WHERE RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $1 AND status = 'booked'",
       [normPhone]
     );
     const used = parseInt(countRows[0].count, 10);
 
     if (used + seats.length > MAX_SEATS_PER_PERSON) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ 
-        error: `На этот номер уже забронировано ${used} мест. Можно добавить не более ${MAX_SEATS_PER_PERSON - used}.` 
-      });
+      return res.status(409).json({ error: `На этот номер уже забронировано ${used} мест.` });
     }
 
     for (const seat of seats) {
       await client.query(
-        'INSERT INTO bookings (seat_key, fullname, phone) VALUES ($1, $2, $3)',
+        "INSERT INTO bookings (seat_key, fullname, phone, status) VALUES ($1, $2, $3, 'booked')",
         [seat, fullname.trim(), phone.trim()]
       );
     }
     
     await client.query('COMMIT');
     
-    const { rows: all } = await client.query('SELECT seat_key FROM bookings');
-    res.json({ ok: true, booked: all.map(r => r.seat_key), left: MAX_SEATS_PER_PERSON - (used + seats.length) });
+    const { rows: all } = await client.query("SELECT seat_key, status FROM bookings");
+    res.json({ ok: true, booked: all, left: MAX_SEATS_PER_PERSON - (used + seats.length) });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error(err);
     res.status(500).json({ error: 'Ошибка при бронировании' });
   } finally {
     client.release();
   }
 });
 
-// --- ПОЛЬЗОВАТЕЛЬ: НАЙТИ СВОИ БРОНИ ---
 app.get('/api/my-bookings', async (req, res) => {
   const phone = req.query.phone;
   if (!phone) return res.status(400).json({ error: 'Введите телефон' });
   try {
     const normPhone = normalizePhone(phone);
     const { rows } = await pool.query(
-      "SELECT seat_key FROM bookings WHERE RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $1",
+      "SELECT seat_key FROM bookings WHERE RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $1 AND status = 'booked'",
       [normPhone]
     );
     res.json(rows.map(r => r.seat_key));
@@ -141,23 +134,13 @@ app.get('/api/my-bookings', async (req, res) => {
   }
 });
 
-// --- ПОЛЬЗОВАТЕЛЬ: ОТМЕНИТЬ БРОНИ ---
 app.post('/api/cancel', async (req, res) => {
   const { seats, phone } = req.body;
-  if (!seats || !seats.length) return res.status(400).json({ error: 'Не выбраны места для отмены' });
-  
+  if (!seats || !seats.length) return res.status(400).json({ error: 'Не выбраны места' });
   try {
     const normPhone = normalizePhone(phone);
-    // Проверяем, что эти места действительно принадлежат этому номеру
-    const { rows } = await pool.query(
-      "SELECT seat_key FROM bookings WHERE seat_key = ANY($1) AND RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $2",
-      [seats, normPhone]
-    );
-    if (rows.length !== seats.length) {
-      return res.status(403).json({ error: 'Некоторые места вам не принадлежат' });
-    }
     await pool.query(
-      "DELETE FROM bookings WHERE seat_key = ANY($1) AND RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $2",
+      "DELETE FROM bookings WHERE seat_key = ANY($1) AND RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $2 AND status = 'booked'",
       [seats, normPhone]
     );
     res.json({ ok: true });
@@ -166,13 +149,32 @@ app.post('/api/cancel', async (req, res) => {
   }
 });
 
-// --- АДМИНКА ---
-app.get('/admin', async (req, res) => {
-  if (req.query.pass !== ADMIN_PASSWORD) {
-    return res.status(401).send('<h1>Доступ запрещен</h1><p>Добавьте к адресу ?pass=ваш_пароль</p>');
-  }
+// --- АДМИН: БЛОКИРОВКА/РАЗБЛОКИРОВКА МЕСТ ---
+app.post('/api/admin/toggle-block', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
+  const { seat } = req.body;
   try {
-    const { rows } = await pool.query('SELECT * FROM bookings ORDER BY created_at DESC');
+    const { rows } = await pool.query('SELECT * FROM bookings WHERE seat_key = $1', [seat]);
+    if (rows.length > 0) {
+      if (rows[0].status === 'blocked') {
+        await pool.query('DELETE FROM bookings WHERE seat_key = $1', [seat]);
+        return res.json({ status: 'free' });
+      } else {
+        return res.status(400).json({ error: 'Это место уже кем-то забронировано' });
+      }
+    } else {
+      await pool.query("INSERT INTO bookings (seat_key, status) VALUES ($1, 'blocked')", [seat]);
+      return res.json({ status: 'blocked' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: 'Ошибка БД' });
+  }
+});
+
+app.get('/admin', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('<h1>Доступ запрещен</h1>');
+  try {
+    const { rows } = await pool.query("SELECT * FROM bookings WHERE status = 'booked' ORDER BY created_at DESC");
     
     let html = `<html><head><meta charset="utf-8"><title>Админка</title>
     <style>
@@ -181,55 +183,21 @@ app.get('/admin', async (req, res) => {
       th,td{border:1px solid #ccc;padding:8px;text-align:left}
       th{background:#f4f4f4}
       .btn-red{background:#d9534f;color:white;border:none;padding:5px 10px;border-radius:3px;cursor:pointer}
-      .btn-red:hover{background:#c9302c}
     </style></head>
     <body>
-    <h1>Все брони (${rows.length} мест)</h1>
-    <table>
-    <tr><th>Место</th><th>Имя</th><th>Телефон</th><th>Дата</th><th>Действие</th></tr>`;
+    <h1>Проданные билеты (${rows.length} шт.)</h1>
+    <p>Чтобы заблокировать место, зайдите на сайт и включите "Режим Админа" внизу страницы.</p>
+    <table><tr><th>Место</th><th>Имя</th><th>Телефон</th><th>Дата</th></tr>`;
     
     rows.forEach(r => {
-      html += `<tr>
-        <td>${r.seat_key}</td>
-        <td>${r.fullname}</td>
-        <td>${r.phone}</td>
-        <td>${new Date(r.created_at).toLocaleString('ru-RU')}</td>
-        <td><button class="btn-red" onclick="deleteSeat('${r.seat_key}')">Удалить</button></td>
-      </tr>`;
+      html += `<tr><td>${r.seat_key}</td><td>${r.fullname}</td><td>${r.phone}</td><td>${new Date(r.created_at).toLocaleString('ru-RU')}</td></tr>`;
     });
     
-    html += `</table>
-    <script>
-      async function deleteSeat(seat) {
-        if (!confirm('Удалить бронь на место ' + seat + '?')) return;
-        const pass = new URLSearchParams(window.location.search).get('pass');
-        const res = await fetch('/api/admin/delete-seat?pass=' + pass, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ seat })
-        });
-        if (res.ok) location.reload();
-        else alert('Ошибка удаления');
-      }
-    </script>
-    </body></html>`;
+    html += `</table></body></html>`;
     res.send(html);
   } catch (err) {
     res.status(500).send('Ошибка БД');
   }
 });
 
-// --- АДМИН: УДАЛИТЬ КОНКРЕТНОЕ МЕСТО ---
-app.post('/api/admin/delete-seat', async (req, res) => {
-  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
-  try {
-    await pool.query('DELETE FROM bookings WHERE seat_key = $1', [req.body.seat]);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Ошибка БД' });
-  }
-});
-
-app.listen(PORT, () => {
-  console.log(`Сервер запущен на порту ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
