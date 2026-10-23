@@ -55,10 +55,10 @@
   .seat.selected{background:var(--selected) !important; color:#1a1206; box-shadow:0 0 0 2px rgba(245,158,11,.6); text-shadow: none;}
   .seat.booked{background:var(--booked) !important; color:transparent; cursor:not-allowed;}
   .seat.blocked{background:var(--blocked) !important; color:transparent; cursor:not-allowed; border:1px solid #333;}
-  .seat.disabled{opacity: 0.3; cursor: not-allowed; filter: grayscale(100%);}
+  .seat.disabled{opacity: 0.2; cursor: not-allowed; filter: grayscale(100%);}
 
   /* Легенда */
-  .legend{display:flex; gap:15px; flex-wrap:wrap; justify-content:center; margin:20px 0; font-size:12px; color:var(--muted)}
+  .legend{display:flex; gap:15px; flex-wrap:wrap; justify-content:center; margin:15px 0; font-size:12px; color:var(--muted)}
   .legend span{display:flex; align-items:center; gap:5px}
   .dot{width:12px; height:12px; border-radius:3px; display:inline-block}
 
@@ -125,14 +125,14 @@
   </div>
 </div>
 
-<!-- ЛЕГЕНДА (ЦВЕТА И ЦЕНЫ) -->
+<!-- ЛЕГЕНДА -->
 <div class="legend">
   <span><i class="dot" style="background:#2a3342"></i>свободно</span>
   <span><i class="dot" style="background:#f59e0b"></i>выбрано</span>
   <span><i class="dot" style="background:#5a2a36"></i>занято</span>
   <span><i class="dot" style="background:#000; border:1px solid #555"></i>не продается</span>
 </div>
-<div class="legend" style="margin-top:-10px;">
+<div class="legend" style="margin-top:-5px;">
   <span><i class="dot" style="background:#ef4444"></i>1500₽</span>
   <span><i class="dot" style="background:#fca5a5"></i>1400₽</span>
   <span><i class="dot" style="background:#f97316"></i>1300₽</span>
@@ -194,23 +194,18 @@ let selected  = new Set();
 let cancelSeats = new Set();
 let isAdminMode = false;
 
-// ==========================================
-// СХЕМА ЗАЛА ИЗ EXCEL (Лист "концертный зал")
-// ==========================================
+// СХЕМА ЗАЛА
 const hallData = {
   leftBalcB:  [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2],
-  leftBalcA:  [16, 15, 14, 13, 12, 11, 10, 8], // 4 места в ряду по факту, но в Excel 16
+  leftBalcA:  [16, 15, 14, 13, 12, 11, 10, 8],
   parterre:   [39, 37, 37, 35, 20, 27, 31, 33, 32, 30, 30, 29, 29, 29, 29, 28, 28, 27, 19, 19, 19, 30, 20, 17, 19],
   centralBalc:[27, 28, 30, 31, 28],
   rightBalcB: [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2],
   rightBalcA: [16, 15, 14, 13, 12, 11, 10, 8]
 };
 
-// Функция определения цены и цвета в зависимости от зоны и ряда
 function getPriceAndColor(zone, row) {
-  let price = 600;
-  let color = '#60a5fa'; // Синий (600)
-  
+  let price = 600, color = '#60a5fa'; // По умолчанию синий
   if (zone === 'parterre') {
     if (row === 1) { price = 1500; color = '#ef4444'; }
     else if (row === 2) { price = 1400; color = '#fca5a5'; }
@@ -219,7 +214,6 @@ function getPriceAndColor(zone, row) {
     else if (row >= 8 && row <= 12) { price = 1000; color = '#22c55e'; }
     else if (row >= 13 && row <= 17) { price = 800; color = '#86efac'; }
   }
-  // Балконы и остальной партер оставляем по 600
   return { price, color };
 }
 
@@ -230,17 +224,13 @@ function createSeat(key, num, title, color, price, isBookingEnabled) {
   btn.dataset.key = key;
   btn.textContent = num;
   btn.title = `${title} (${price} ₽)`;
-  
-  // Красим в цвет цены (если это не админский клик)
   btn.style.background = color;
 
   if (!isBookingEnabled) btn.classList.add('disabled');
+  
   if (bookedSet.has(key)) {
-    if (bookedSet.has(key + '_blocked')) {
-      btn.classList.add('blocked');
-    } else {
-      btn.classList.add('booked');
-    }
+    if (bookedSet.has(key + '_blocked')) btn.classList.add('blocked');
+    else btn.classList.add('booked');
     btn.disabled = true;
   }
   if (selected.has(key)) btn.classList.add('selected');
@@ -249,6 +239,7 @@ function createSeat(key, num, title, color, price, isBookingEnabled) {
 
 function renderRows(containerId, dataArray, prefix, zoneName, isVertical = false, bookingEnabled = true) {
   const container = document.getElementById(containerId);
+  if (!container) return;
   container.innerHTML = '';
   
   dataArray.forEach((seatCount, index) => {
@@ -293,34 +284,37 @@ async function loadBookings(){
     const data = await res.json();
     
     bookedSet.clear();
-    data.forEach(item => {
-      bookedSet.add(item.seat_key);
-      if (item.status === 'blocked') bookedSet.add(item.seat_key + '_blocked');
-    });
+    if (Array.isArray(data)) {
+      data.forEach(item => {
+        if (typeof item === 'string') {
+          bookedSet.add(item);
+        } else {
+          bookedSet.add(item.seat_key);
+          if (item.status === 'blocked') bookedSet.add(item.seat_key + '_blocked');
+        }
+      });
+    }
     
     for (const k of [...selected]) if (bookedSet.has(k)) selected.delete(k);
     render();
   } catch (e) {
-    console.error("Ошибка обновления");
+    console.error("Ошибка обновления, но зал отрисован");
+    render(); // Все равно рисуем зал, даже если база не ответила
   }
 }
 
-// КЛИКИ ПО МЕСТАМ
+// КЛИКИ
 document.body.addEventListener('click', async e => {
   const btn = e.target.closest('.seat');
   if (!btn || btn.classList.contains('booked') || btn.classList.contains('disabled')) return;
   const key = btn.dataset.key;
   
-  // Если это режим АДМИНА
+  // Режим АДМИНА
   if (isAdminMode) {
     if (btn.classList.contains('blocked')) {
-      if(confirm('Разблокировать это место?')) {
-        await toggleBlock(key);
-      }
+      if(confirm('Разблокировать это место?')) await toggleBlock(key);
     } else {
-      if(confirm('ЗАБЛОКИРОВАТЬ это место для продажи?')) {
-        await toggleBlock(key);
-      }
+      if(confirm('ЗАБЛОКИРОВАТЬ это место для продажи?')) await toggleBlock(key);
     }
     return;
   }
@@ -340,20 +334,14 @@ document.body.addEventListener('click', async e => {
 async function toggleBlock(seatKey) {
   try {
     const res = await fetch(`/api/admin/toggle-block?pass=${ADMIN_PASSWORD}`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ seat: seatKey })
     });
-    const data = await res.json();
-    if (res.ok) {
-      loadBookings();
-    } else {
-      alert(data.error);
-    }
+    if (res.ok) loadBookings();
+    else { const d = await res.json(); alert(d.error); }
   } catch (e) { alert('Ошибка сети'); }
 }
 
-// РЕЖИМ АДМИНА
 document.getElementById('adminBtn').addEventListener('click', () => {
   if (isAdminMode) {
     isAdminMode = false;
@@ -366,15 +354,12 @@ document.getElementById('adminBtn').addEventListener('click', () => {
       isAdminMode = true;
       document.getElementById('adminBtn').classList.add('active');
       document.getElementById('adminBtn').textContent = 'Выйти из Админа';
-      showToast('Кликайте по местам, чтобы блокировать (черные)');
-    } else if (pass !== null) {
-      alert('Неверный пароль');
-    }
+      showToast('Кликайте по местам, чтобы блокировать');
+    } else if (pass !== null) alert('Неверный пароль');
   }
 });
 
-// ... (Остальные функции бронирования и отмены без изменений) ...
-
+// БРОНИРОВАНИЕ И ОТМЕНА
 document.getElementById('bookBtn').addEventListener('click', () => {
   if (!selected.size) return;
   document.getElementById('modalSeats').textContent = seatsText();
@@ -435,6 +420,7 @@ document.getElementById('cancelBtnOpen').addEventListener('click', () => {
   document.getElementById('myBookingsList').style.display = 'none';
   document.getElementById('cancelModal').hidden = false;
 });
+
 async function findMyBookings() {
   const phone = document.getElementById('cancelPhone').value.trim();
   const res = await fetch('/api/my-bookings?phone=' + phone);
@@ -454,6 +440,7 @@ async function findMyBookings() {
   });
   document.getElementById('myBookingsList').style.display = 'block';
 }
+
 async function cancelBookings() {
   if (!cancelSeats.size) return alert('Выберите места');
   const phone = document.getElementById('cancelPhone').value.trim();
@@ -465,7 +452,9 @@ async function cancelBookings() {
 let toastTimer;
 function showToast(msg){ document.getElementById('toast').textContent=msg; document.getElementById('toast').classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>document.getElementById('toast').classList.remove('show'),2500); }
 
-loadBookings();
+// Инициализация
+render(); // Сначала рисуем зал
+loadBookings(); // Потом загружаем статусы
 setInterval(loadBookings, POLL_MS);
 </script>
 </body>
