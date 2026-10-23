@@ -27,7 +27,19 @@ async function initDB() {
       )
     `);
     
-    // Создаем таблицу для настроек цен
+    // Снимаем старые ограничения NOT NULL, если они остались с прошлых версий
+    await pool.query(`
+      DO $$ 
+      BEGIN 
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='bookings' AND column_name='fullname' AND is_nullable='NO') THEN
+          ALTER TABLE bookings ALTER COLUMN fullname DROP NOT NULL;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='bookings' AND column_name='phone' AND is_nullable='NO') THEN
+          ALTER TABLE bookings ALTER COLUMN phone DROP NOT NULL;
+        END IF;
+      END $$;
+    `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS settings (
         key VARCHAR(50) PRIMARY KEY,
@@ -47,7 +59,6 @@ function normalizePhone(phone) {
   return d.length > 10 ? d.slice(-10) : d;
 }
 
-// --- API НАСТРОЕК ---
 app.get('/api/settings', async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT value FROM settings WHERE key = 'prices'");
@@ -66,7 +77,6 @@ app.post('/api/admin/settings', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
-// --- БРОНИРОВАНИЕ ---
 app.get('/api/bookings', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT seat_key, status FROM bookings');
@@ -145,6 +155,7 @@ app.post('/api/cancel', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка при отмене' }); }
 });
 
+// ИСПРАВЛЕННЫЙ ЭНДПОИНТ БЛОКИРОВКИ
 app.post('/api/admin/toggle-block', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
   const { seat } = req.body;
@@ -158,10 +169,14 @@ app.post('/api/admin/toggle-block', async (req, res) => {
         return res.status(400).json({ error: 'Место уже забронировано' });
       }
     } else {
-      await pool.query("INSERT INTO bookings (seat_key, status) VALUES ($1, 'blocked')", [seat]);
+      // Теперь при блокировке подставляем системные значения, чтобы БД не ругалась
+      await pool.query("INSERT INTO bookings (seat_key, fullname, phone, status) VALUES ($1, 'Админ', 'Заблокировано', 'blocked')", [seat]);
       return res.json({ status: 'blocked' });
     }
-  } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
+  } catch (err) { 
+    console.error(err);
+    res.status(500).json({ error: 'Ошибка БД' }); 
+  }
 });
 
 app.get('/admin', async (req, res) => {
