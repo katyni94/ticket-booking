@@ -17,7 +17,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 async function initDB() {
   try {
-    // 1. Создаем таблицу, если ее нет
     await pool.query(`
       CREATE TABLE IF NOT EXISTS bookings (
         seat_key VARCHAR(50) PRIMARY KEY,
@@ -28,13 +27,14 @@ async function initDB() {
       )
     `);
     
-    // 2. Принудительно применяем миграции (игнорируем ошибки, если они уже применены)
-    await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'booked';`).catch(()=>{});
+    // РАСШИРЯЕМ ПОЛЕ ДО 50 СИМВОЛОВ (исправляет ошибку value too long)
+    await pool.query(`ALTER TABLE bookings ALTER COLUMN seat_key TYPE VARCHAR(50);`).catch(()=>{});
+    
+    // На всякий случай убираем старые ограничения
     await pool.query(`ALTER TABLE bookings ALTER COLUMN fullname DROP NOT NULL;`).catch(()=>{});
     await pool.query(`ALTER TABLE bookings ALTER COLUMN phone DROP NOT NULL;`).catch(()=>{});
-    await pool.query(`ALTER TABLE bookings RENAME COLUMN surname TO fullname;`).catch(()=>{}); // На случай старой версии
+    await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'booked';`).catch(()=>{});
 
-    // 3. Таблица для настроек цен
     await pool.query(`
       CREATE TABLE IF NOT EXISTS settings (
         key VARCHAR(50) PRIMARY KEY,
@@ -44,7 +44,7 @@ async function initDB() {
     
     console.log('База данных успешно обновлена и готова к работе');
   } catch (err) {
-    console.error('КРИТИЧЕСКАЯ Ошибка инициализации БД:', err);
+    console.error('Ошибка инициализации БД:', err);
   }
 }
 initDB();
@@ -150,7 +150,6 @@ app.post('/api/cancel', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка при отмене' }); }
 });
 
-// ИСПРАВЛЕННЫЙ ЭНДПОИНТ БЛОКИРОВКИ
 app.post('/api/admin/toggle-block', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
   const { seat } = req.body;
@@ -164,13 +163,11 @@ app.post('/api/admin/toggle-block', async (req, res) => {
         return res.status(400).json({ error: 'Место уже забронировано' });
       }
     } else {
-      // При блокировке подставляем системные значения
       await pool.query("INSERT INTO bookings (seat_key, fullname, phone, status) VALUES ($1, 'Админ', 'Заблокировано', 'blocked')", [seat]);
       return res.json({ status: 'blocked' });
     }
   } catch (err) { 
-    console.error(err);
-    res.status(500).json({ error: 'Ошибка БД: ' + err.message }); // Отправляем точный текст ошибки
+    res.status(500).json({ error: 'Ошибка БД: ' + err.message });
   }
 });
 
