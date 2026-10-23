@@ -45,7 +45,7 @@
   .seat:hover:not(.booked):not(.blocked):not(.disabled){transform:scale(1.15); z-index: 10;}
   .seat.selected{background:var(--selected) !important; color:#1a1206; box-shadow:0 0 0 2px rgba(245,158,11,.6); text-shadow: none;}
   .seat.booked{background:var(--booked) !important; color:transparent; cursor:not-allowed;}
-  .seat.blocked{background:var(--blocked) !important; color:transparent; cursor:not-allowed; border:1px solid #333;}
+  .seat.blocked{background:var(--blocked) !important; color:transparent; cursor:pointer; border:1px solid #333;}
   .seat.disabled{opacity: 0.15; cursor: not-allowed; filter: grayscale(100%);}
 
   .legend{display:flex; gap:15px; flex-wrap:wrap; justify-content:center; margin:15px 0; font-size:12px; color:var(--muted)}
@@ -314,7 +314,6 @@ function parseRow(str, maxSeat) {
   return row;
 }
 
-// Ищем правила с конца (последние добавленные имеют приоритет)
 function getPriceAndColor(zone, row, seatNum) {
   if (priceSettings.rules) {
     for (let i = priceSettings.rules.length - 1; i >= 0; i--) {
@@ -333,10 +332,15 @@ function createSeat(key, num, title, color, price, side, zoneName, rowNum) {
   btn.dataset.row = rowNum; btn.dataset.seat = num; btn.dataset.price = price; btn.textContent = num;
   btn.style.background = color;
   if (side !== currentEvent) btn.classList.add('disabled');
+  
   if (bookedSet.has(key)) {
-    if (bookedSet.has(key + '_blocked')) btn.classList.add('blocked');
-    else btn.classList.add('booked');
-    btn.disabled = true;
+    if (bookedSet.has(key + '_blocked')) {
+      btn.classList.add('blocked');
+      // Не делаем disabled, чтобы админ мог кликнуть и разблокировать
+    } else {
+      btn.classList.add('booked');
+      btn.disabled = true; // Забронированные (проданные) места не кликаются
+    }
   }
   if (selected.has(key)) btn.classList.add('selected');
   return btn;
@@ -477,20 +481,25 @@ document.body.addEventListener('mouseout', e => {
 
 document.body.addEventListener('click', async e => {
   const btn = e.target.closest('.seat');
-  if (!btn || btn.classList.contains('booked')) return;
+  if (!btn) return;
   
   const key = btn.dataset.key;
   
   if (isAdminMode) {
+    if (btn.classList.contains('booked')) {
+       alert('Это место уже куплено клиентом, его нельзя разблокировать.');
+       return;
+    }
     if (btn.classList.contains('blocked')) {
-      if(confirm('Разблокировать?')) await toggleBlock(key);
+      if(confirm('Разблокировать это место?')) await toggleBlock(key);
     } else {
-      if(confirm('ЗАБЛОКИРОВАТЬ место?')) await toggleBlock(key);
+      if(confirm('ЗАБЛОКИРОВАТЬ место для продажи?')) await toggleBlock(key);
     }
     return;
   }
 
-  if (btn.classList.contains('disabled')) return;
+  // Для обычных пользователей
+  if (btn.classList.contains('booked') || btn.classList.contains('blocked') || btn.classList.contains('disabled') || btn.disabled) return;
 
   if (selected.has(key)) {
     selected.delete(key); btn.classList.remove('selected');
@@ -548,7 +557,6 @@ function openSettings() {
   document.getElementById('settingsModal').hidden = false;
 }
 
-// БЫСТРОЕ ПРИМЕНЕНИЕ ЦЕНЫ НА РЯДЫ
 function applyQuickRule() {
     const start = Number(document.getElementById('quick-start').value);
     const end = Number(document.getElementById('quick-end').value);
@@ -560,13 +568,10 @@ function applyQuickRule() {
     if (!priceSettings.rules) priceSettings.rules = [];
 
     for (let r = start; r <= end; r++) {
-        // Удаляем старые правила для этого ряда, чтобы не засорять список
         priceSettings.rules = priceSettings.rules.filter(rule => !(rule.zone === 'parterre' && rule.row === r));
-        // Добавляем новое правило на весь ряд (от 1 до 99 места)
         priceSettings.rules.push({ zone: 'parterre', row: r, start: 1, end: 99, price: price, color: color });
     }
     
-    // Обновляем визуал в модалке и на главном экране
     const container = document.getElementById('rules-container');
     container.innerHTML = '';
     priceSettings.rules.forEach(r => addRuleRow(r));
