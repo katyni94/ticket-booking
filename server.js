@@ -5,7 +5,7 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MAX_SEATS_PER_PERSON = 4;
-const ADMIN_PASSWORD = "admin123"; // Пароль для админки и блокировки мест
+const ADMIN_PASSWORD = "admin123"; // Пароль для админки
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -17,7 +17,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 async function initDB() {
   try {
-    // Добавлена колонка status
+    // Создаем таблицу, если ее нет
     await pool.query(`
       CREATE TABLE IF NOT EXISTS bookings (
         seat_key VARCHAR(50) PRIMARY KEY,
@@ -27,6 +27,17 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    
+    // АВТО-МИГРАЦИЯ: Добавляем колонку status, если она вдруг отсутствует (для старых версий таблицы)
+    await pool.query(`
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='bookings' AND column_name='status') THEN
+          ALTER TABLE bookings ADD COLUMN status VARCHAR(20) DEFAULT 'booked';
+        END IF;
+      END $$;
+    `);
+    
     console.log('База данных готова к работе');
   } catch (err) {
     console.error('Ошибка подключения к БД:', err);
@@ -39,7 +50,6 @@ function normalizePhone(phone) {
   return d.length > 10 ? d.slice(-10) : d;
 }
 
-// Отдаем клиентам ключи и статусы (booked или blocked)
 app.get('/api/bookings', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT seat_key, status FROM bookings');
@@ -67,7 +77,6 @@ app.get('/api/limit', async (req, res) => {
 
 app.post('/api/bookings', async (req, res) => {
   const { seats, fullname, phone } = req.body || {};
-
   if (!Array.isArray(seats) || seats.length === 0) return res.status(400).json({ error: 'Не выбраны места' });
   
   const digits = String(phone || '').replace(/\D/g, '');
@@ -78,7 +87,6 @@ app.post('/api/bookings', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
     const { rows: existing } = await client.query(
       'SELECT seat_key FROM bookings WHERE seat_key = ANY($1) FOR UPDATE',
       [seats]
@@ -108,7 +116,6 @@ app.post('/api/bookings', async (req, res) => {
     }
     
     await client.query('COMMIT');
-    
     const { rows: all } = await client.query("SELECT seat_key, status FROM bookings");
     res.json({ ok: true, booked: all, left: MAX_SEATS_PER_PERSON - (used + seats.length) });
   } catch (err) {
@@ -149,7 +156,6 @@ app.post('/api/cancel', async (req, res) => {
   }
 });
 
-// --- АДМИН: БЛОКИРОВКА/РАЗБЛОКИРОВКА МЕСТ ---
 app.post('/api/admin/toggle-block', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
   const { seat } = req.body;
@@ -175,24 +181,13 @@ app.get('/admin', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('<h1>Доступ запрещен</h1>');
   try {
     const { rows } = await pool.query("SELECT * FROM bookings WHERE status = 'booked' ORDER BY created_at DESC");
-    
     let html = `<html><head><meta charset="utf-8"><title>Админка</title>
-    <style>
-      body{font-family:sans-serif;padding:20px}
-      table{border-collapse:collapse;width:100%;margin-top:20px}
-      th,td{border:1px solid #ccc;padding:8px;text-align:left}
-      th{background:#f4f4f4}
-      .btn-red{background:#d9534f;color:white;border:none;padding:5px 10px;border-radius:3px;cursor:pointer}
-    </style></head>
-    <body>
-    <h1>Проданные билеты (${rows.length} шт.)</h1>
-    <p>Чтобы заблокировать место, зайдите на сайт и включите "Режим Админа" внизу страницы.</p>
+    <style>body{font-family:sans-serif;padding:20px}table{border-collapse:collapse;width:100%;margin-top:20px}th,td{border:1px solid #ccc;padding:8px;text-align:left}th{background:#f4f4f4}</style></head>
+    <body><h1>Проданные билеты (${rows.length} шт.)</h1>
     <table><tr><th>Место</th><th>Имя</th><th>Телефон</th><th>Дата</th></tr>`;
-    
     rows.forEach(r => {
       html += `<tr><td>${r.seat_key}</td><td>${r.fullname}</td><td>${r.phone}</td><td>${new Date(r.created_at).toLocaleString('ru-RU')}</td></tr>`;
     });
-    
     html += `</table></body></html>`;
     res.send(html);
   } catch (err) {
