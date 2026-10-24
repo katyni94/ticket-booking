@@ -24,7 +24,8 @@ let appSettings = {
   bgSize: 'cover',
   bgPosX: 50,
   bgPosY: 50,
-  restrictAdminSeats: true
+  restrictAdminSeats: true,
+  groups: { left: [], right: [] }
 };
 
 async function initDB() {
