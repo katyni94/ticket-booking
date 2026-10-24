@@ -416,6 +416,7 @@ let priceSettings = {};
 let activePaint = null;
 let paintStart = null;
 
+// ТОЧНЫЕ СХЕМЫ МЕСТ (Исправленные и выровненные)
 const parterreStrings = [
   "-000000000-000000000000000000000-000000000-", "--00000000-000000000000000000000-00000000-", "--00000000-000000000000000000000-00000000-",
   "--00000000--00000000000000000000-0000000-", "---------------00000000000000000000-----------", "---00000000-0000000000000000000--00000000-",
@@ -428,18 +429,40 @@ const parterreStrings = [
   "-----------0000000000000000000----"
 ];
 const parterreMaxSeats = [39, 37, 37, 35, 20, 35, 31, 33, 32, 30, 30, 29, 29, 29, 29, 28, 28, 27, 19, 19, 19, 30, 20, 17, 19];
+
 const centralStrings = [
-  "---------000000000000000000000000000----------", "--------0000000000000000000000000000----------",
-  "-------00000000000000000000000000000----------", "-------000000000000000000000000000000----------",
-  "-------00000000000000----00000000000000----------"
+  "---------000000000000000000000000000-------------", // 1 (27 мест)
+  "--------0000000000000000000000000000-------------", // 2 (28 мест)
+  "-------00000000000000000000000000000------------", // 3 (30 мест)
+  "------000000000000000000000000000000------------", // 4 (31 мест)
+  "-------00000000000000----00000000000000----------"  // 5 (28 мест)
 ];
 const centralMaxSeats = [27, 28, 30, 31, 28];
+
 const tanci_parterre = { 1: [19, 39], 2: [18, 37], 3: [18, 37], 4: [17, 35], 5: [10, 20], 6: [17, 35], 7: [15, 31], 8: [16, 33], 9: [15, 32], 10: [14, 30], 11: [14, 30], 12: [14, 29], 13: [14, 29], 14: [14, 29], 15: [14, 29], 16: [14, 28], 17: [14, 28], 18: [13, 27], 19: [11, 19], 20: [11, 19], 21: [11, 19], 22: [15, 30], 23: [10, 20], 24: [9, 17], 25: [10, 19] };
 const tanci_central = { 1: [14, 27], 2: [14, 28], 3: [15, 30], 4: [16, 31], 5: [15, 28] };
-const leftBalcAConf = [{ rowNum: 4, present: (r) => r >= 2 }, { rowNum: 3, present: (r) => r >= 1 }, { rowNum: 2, present: (r) => r >= 1 }, { rowNum: 1, present: (r) => true }];
-const leftBalcBConf = [{ rowNum: 2, present: (r) => (r >= 1 && r <= 5) || r >= 9 }, { rowNum: 1, present: (r) => (r >= 0 && r <= 5) || r >= 9 }];
-const rightBalcAConf = [{ rowNum: 1, present: (r) => true }, { rowNum: 2, present: (r) => r >= 1 }, { rowNum: 3, present: (r) => true }, { rowNum: 4, present: (r) => r >= 1 }];
-const rightBalcBConf = [{ rowNum: 1, present: (r) => (r >= 0 && r <= 5) || r >= 9 }, { rowNum: 2, present: (r) => (r >= 1 && r <= 5) || r >= 9 }];
+
+// Конфигурации балконов
+const leftBalcAConf = [
+    { rowNum: 4, present: (r) => r >= 1 },
+    { rowNum: 3, present: (r) => r >= 1 },
+    { rowNum: 2, present: (r) => r >= 1 },
+    { rowNum: 1, present: () => true }
+];
+const leftBalcBConf = [
+    { rowNum: 2, present: () => true },
+    { rowNum: 1, present: () => true }
+];
+const rightBalcAConf = [
+    { rowNum: 1, present: () => true },
+    { rowNum: 2, present: (r) => r >= 1 },
+    { rowNum: 3, present: () => true },
+    { rowNum: 4, present: (r) => r >= 1 }
+];
+const rightBalcBConf = [
+    { rowNum: 1, present: () => true },
+    { rowNum: 2, present: () => true }
+];
 
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('side') === 'left') forcedSideMode = 'left';
@@ -589,9 +612,9 @@ function render() {
   const centralData = centralStrings.map((s, i) => parseRow(s, centralMaxSeats[i]));
   renderGrid('central-balc', centralData, 'central', 'Центральный балкон', null, true);
   renderBalcony('left-balc-a', leftBalcAConf, 18, 'Левый балкон А', 'left', 'a');
-  renderBalcony('left-balc-b', leftBalcBConf, 20, 'Левый балкон Б', 'left', 'b');
+  renderBalcony('left-balc-b', leftBalcBConf, 16, 'Левый балкон Б', 'left', 'b');
   renderBalcony('right-balc-a', rightBalcAConf, 18, 'Правый балкон А', 'right', 'a');
-  renderBalcony('right-balc-b', rightBalcBConf, 20, 'Правый балкон Б', 'right', 'b');
+  renderBalcony('right-balc-b', rightBalcBConf, 16, 'Правый балкон Б', 'right', 'b');
   
   const btnL = document.getElementById('btn-event-left');
   const btnR = document.getElementById('btn-event-right');
