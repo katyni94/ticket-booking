@@ -116,7 +116,6 @@
   input[type="text"], input[type="tel"], input[type="url"]{width:100%; margin-top:5px; margin-bottom:15px; padding:11px; border-radius:8px; border:1px solid #2a3446; background:#111721; color:var(--text); font-family:monospace;}
   .error{color:#f87171; font-size:13px; margin-top:10px; min-height:16px;}
   
-  /* Стили для всплывающего уведомления */
   .toast{
     position:fixed; top: 50%; left:50%; transform:translate(-50%, -50%) scale(0.9);
     background:#1a8a4d; color:#fff; padding:15px 30px; border-radius:12px;
@@ -125,9 +124,8 @@
   }
   .toast.show{opacity:1; transform:translate(-50%, -50%) scale(1);}
   
-  /* Красное уведомление об ошибке */
   .toast.error {
-    background: #8b1c1c; /* Приглушенный красный */
+    background: #8b1c1c;
     color: #ffdede;
     box-shadow: 0 0 20px rgba(139, 28, 28, 0.6);
   }
@@ -313,7 +311,7 @@
 const POLL_MS = 5000;
 const ADMIN_PASSWORD = "admin123";
 let currentEvent = 'left';
-let CURRENT_MAX_SEATS = 4; // Будет обновляться из настроек
+let CURRENT_MAX_SEATS = 4;
 
 let bookedSet = new Set();
 let selected  = new Set();
@@ -556,7 +554,6 @@ async function loadSettings() {
     
     CURRENT_MAX_SEATS = priceSettings.maxSeats;
     
-    // Установка фона, если он задан
     if (priceSettings.bgUrl) {
         document.documentElement.style.setProperty('--bg-image', `url('${priceSettings.bgUrl}')`);
     } else {
@@ -644,7 +641,7 @@ document.body.addEventListener('click', async e => {
     selected.delete(key); btn.classList.remove('selected');
   } else {
     if (selected.size >= CURRENT_MAX_SEATS) {
-        return showToast(`На один номер можно забронировать не более ${CURRENT_MAX_SEATS} мест!`, 'error'); // Вызов красного уведомления
+        return showToast(`На один номер можно забронировать не более ${CURRENT_MAX_SEATS} мест!`, 'error');
     }
     selected.add(key); btn.classList.add('selected');
   }
@@ -754,13 +751,8 @@ document.getElementById('adminBtn').addEventListener('click', () => {
 });
 
 function openSettings() {
-  let def = priceSettings.default || { price: 600, color: '#2a3342' };
-  document.getElementById('set-default-price').value = def.price;
-  document.getElementById('set-default-color').value = def.color;
-  
   document.getElementById('set-max-seats').value = priceSettings.maxSeats || 4;
   document.getElementById('set-bg-url').value = priceSettings.bgUrl || '';
-  
   document.getElementById('settingsError').textContent = '';
   document.getElementById('settingsModal').hidden = false;
 }
@@ -788,7 +780,7 @@ async function saveSettings() {
     const newBg = document.getElementById('set-bg-url').value.trim();
     
     const newSettings = {
-      default: { price: Number(document.getElementById('set-default-price').value) || 600, color: document.getElementById('set-default-color').value },
+      default: priceSettings.default || { price: 600, color: '#2a3342' },
       rules: priceSettings.rules || [],
       hidden: priceSettings.hidden || { left: false, right: false },
       maxSeats: newMax,
