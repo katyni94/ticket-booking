@@ -215,6 +215,25 @@ app.post('/api/admin/toggle-block', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
 });
 
+// НОВЫЙ ЭНДПОИНТ: Получить данные о брони для админа
+app.get('/api/admin/booking-info', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
+  try {
+    const { rows } = await pool.query('SELECT * FROM bookings WHERE seat_key = $1', [req.query.seat]);
+    if (rows.length > 0) res.json(rows[0]);
+    else res.status(404).json({ error: 'Не найдено' });
+  } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
+});
+
+// НОВЫЙ ЭНДПОИНТ: Принудительно снять бронь
+app.post('/api/admin/force-cancel', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
+  try {
+    await pool.query('DELETE FROM bookings WHERE seat_key = $1', [req.body.seat]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
+});
+
 app.get('/api/admin/export', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   try {
