@@ -165,6 +165,17 @@ app.post('/api/admin/toggle-block', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
 });
 
+// НОВЫЙ ЭНДПОИНТ: Снять ВСЕ блокировки разом
+app.post('/api/admin/unblock-all', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
+  try {
+    await pool.query("DELETE FROM bookings WHERE status = 'blocked'");
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Ошибка БД: ' + err.message });
+  }
+});
+
 // ЭКСПОРТ В EXCEL
 app.get('/api/admin/export', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
