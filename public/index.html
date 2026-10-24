@@ -416,7 +416,6 @@ let priceSettings = {};
 let activePaint = null;
 let paintStart = null;
 
-// (Массивы зон опущены для читаемости, они идентичны предыдущим версиям)
 const parterreStrings = [
   "-000000000-000000000000000000000-000000000-", "--00000000-000000000000000000000-00000000-", "--00000000-000000000000000000000-00000000-",
   "--00000000--00000000000000000000-0000000-", "---------------00000000000000000000-----------", "---00000000-0000000000000000000--00000000-",
@@ -500,8 +499,7 @@ function getPriceAndColor(zone, side, row, seatNum) {
   if (priceSettings.rules) {
     for (let i = priceSettings.rules.length - 1; i >= 0; i--) {
       let r = priceSettings.rules[i];
-      const sideMatch = !r.side || r.side === side;
-      if (r.zone === zone && sideMatch && row == r.row && seatNum >= r.start && seatNum <= r.end) {
+      if (r.zone === zone && row == r.row && seatNum >= r.start && seatNum <= r.end) {
         return { price: r.price, color: r.color };
       }
     }
@@ -536,15 +534,16 @@ function switchEvent(event) {
   render(); 
 }
 
-function renderBalcony(containerId, config, totalSeats, zoneName, side) {
+function renderBalcony(containerId, config, totalSeats, zoneName, side, balcId) {
   const container = document.getElementById(containerId); if (!container) return; container.innerHTML = '';
   for (let r = 0; r < totalSeats; r++) {
     const rowDiv = document.createElement('div'); rowDiv.className = 'row'; const seatNum = totalSeats - r;
     for (let c = 0; c < config.length; c++) {
       const colConf = config[c];
       if (colConf.present(r)) {
-        const { price, color } = getPriceAndColor('balcon', side, colConf.rowNum, seatNum);
-        const key = `balc-${side}-${colConf.rowNum}-${seatNum}`; 
+        const zoneKey = `balc-${side}-${balcId}`;
+        const { price, color } = getPriceAndColor(zoneKey, side, colConf.rowNum, seatNum);
+        const key = `${zoneKey}-${colConf.rowNum}-${seatNum}`; 
         rowDiv.appendChild(createSeat(key, seatNum, `${zoneName} Ряд ${colConf.rowNum} Место ${seatNum}`, color, price, side, zoneName, colConf.rowNum));
       } else { const a = document.createElement('div'); a.className = 'aisle'; a.style.width = '20px'; rowDiv.appendChild(a); }
     }
@@ -589,10 +588,10 @@ function render() {
   renderGrid('parterre', parterreData, 'parterre', 'Партер', null, true);
   const centralData = centralStrings.map((s, i) => parseRow(s, centralMaxSeats[i]));
   renderGrid('central-balc', centralData, 'central', 'Центральный балкон', null, true);
-  renderBalcony('left-balc-a', leftBalcAConf, 18, 'Левый балкон А', 'left');
-  renderBalcony('left-balc-b', leftBalcBConf, 20, 'Левый балкон Б', 'left');
-  renderBalcony('right-balc-a', rightBalcAConf, 18, 'Правый балкон А', 'right');
-  renderBalcony('right-balc-b', rightBalcBConf, 20, 'Правый балкон Б', 'right');
+  renderBalcony('left-balc-a', leftBalcAConf, 18, 'Левый балкон А', 'left', 'a');
+  renderBalcony('left-balc-b', leftBalcBConf, 20, 'Левый балкон Б', 'left', 'b');
+  renderBalcony('right-balc-a', rightBalcAConf, 18, 'Правый балкон А', 'right', 'a');
+  renderBalcony('right-balc-b', rightBalcBConf, 20, 'Правый балкон Б', 'right', 'b');
   
   const btnL = document.getElementById('btn-event-left');
   const btnR = document.getElementById('btn-event-right');
@@ -625,7 +624,6 @@ function updateStats() {
         Всего: <b>${R_total}</b><br>Свободно: <span style="color:#f59e0b">${R_free}</span><br>Забронировано: <span style="color:#f87171">${R_booked}</span><br>Заблокировано: <span style="color:#ccc">${R_blocked}</span>`;
 }
 
-// Отрисовка списка правил для редактирования цен
 function renderPriceRulesList() {
     const list = document.getElementById('price-rules-list');
     list.innerHTML = '';
@@ -637,13 +635,13 @@ function renderPriceRulesList() {
         return;
     }
     
-    // Группируем правила для удобства (по зоне и ряду)
     const grouped = {};
     priceSettings.rules.forEach((r, index) => {
-        const zoneName = r.zone === 'parterre' ? 'Партер' : (r.zone === 'central' ? 'ЦБ' : 'Балкон');
-        const sideName = r.side === 'left' ? 'Л' : (r.side === 'right' ? 'П' : '');
-        const key = `${zoneName}${sideName} Ряд ${r.row} (м. ${r.start}-${r.end})`;
+        let zoneName = 'Партер';
+        if (r.zone === 'central') zoneName = 'ЦБ';
+        else if (r.zone.includes('balc')) zoneName = r.zone.includes('left') ? 'Лев.бал.' : 'Прав.бал.';
         
+        const key = `${zoneName} Р${r.row} (м.${r.start}-${r.end})`;
         if (!grouped[key]) grouped[key] = { color: r.color, indices: [] };
         grouped[key].indices.push(index);
     });
@@ -784,7 +782,15 @@ document.body.addEventListener('click', async e => {
   if (!btn) return;
   
   const key = btn.dataset.key;
-  const zone = btn.dataset.zone.toLowerCase().includes('партер') ? 'parterre' : (btn.dataset.zone.toLowerCase().includes('балкон') ? 'balcon' : 'central');
+  const zoneStr = btn.dataset.zone.toLowerCase();
+  let zone = 'balcon';
+  if (zoneStr.includes('партер')) zone = 'parterre';
+  else if (zoneStr.includes('центральный')) zone = 'central';
+  else if (zoneStr.includes('левый балкон а')) zone = 'balc-left-a';
+  else if (zoneStr.includes('левый балкон б')) zone = 'balc-left-b';
+  else if (zoneStr.includes('правый балкон а')) zone = 'balc-right-a';
+  else if (zoneStr.includes('правый балкон б')) zone = 'balc-right-b';
+
   const row = Number(btn.dataset.row);
   const seat = Number(btn.dataset.seat);
   const side = btn.dataset.side;
@@ -795,27 +801,22 @@ document.body.addEventListener('click', async e => {
     if (!priceSettings.rules) priceSettings.rules = [];
     
     if (!paintStart) {
-        // Одиночный клик - красим только одно место
         paintStart = { zone, row, seat, side, key };
         btn.classList.add('painting');
         
-        // Сразу применяем к 1 месту, если не будет второго клика (по клику вне мест сбросится)
-        const applySingle = () => {
-            priceSettings.rules = priceSettings.rules.filter(r => !(r.zone === zone && r.side === side && r.row === row && r.start === seat && r.end === seat));
-            if (activePaint.price !== 0) priceSettings.rules.push({ zone, side, row, start: seat, end: seat, price: activePaint.price, color: activePaint.color });
+        paintStart.applySingle = () => {
+            priceSettings.rules = priceSettings.rules.filter(r => !(r.zone === zone && r.row === row && r.start === seat && r.end === seat));
+            if (activePaint.price !== 0) priceSettings.rules.push({ zone, row, start: seat, end: seat, price: activePaint.price, color: activePaint.color });
             render(); autoSaveSettings();
         };
-        // Запоминаем, что можно применить одиночно
-        paintStart.applySingle = applySingle;
-        
         showToast('Выбрано 1 место. Кликните по другому для диапазона.');
     } else {
-        if (paintStart.zone !== zone || paintStart.side !== side) {
-            // Если кликнули на другую зону/сторону, сбрасываем и начинаем заново
+        if (paintStart.zone !== zone) {
+            if (paintStart.applySingle) paintStart.applySingle();
             paintStart = { zone, row, seat, side, key };
             document.querySelectorAll('.painting').forEach(el => el.classList.remove('painting'));
             btn.classList.add('painting');
-            showToast('Выбрано 1 место. Кликните по другому для диапазона.');
+            showToast('Начато новое выделение.');
             return;
         }
         
@@ -824,11 +825,10 @@ document.body.addEventListener('click', async e => {
         const minSeat = Math.min(paintStart.seat, seat);
         const maxSeat = Math.max(paintStart.seat, seat);
 
-        // Очищаем старые правила в этом диапазоне
-        priceSettings.rules = priceSettings.rules.filter(r => !(r.zone === zone && r.side === side && r.row >= minRow && r.row <= maxRow && r.start <= maxSeat && r.end >= minSeat));
+        priceSettings.rules = priceSettings.rules.filter(r => !(r.zone === zone && r.row >= minRow && r.row <= maxRow && r.start <= maxSeat && r.end >= minSeat));
         
         for (let r = minRow; r <= maxRow; r++) {
-            if (activePaint.price !== 0) priceSettings.rules.push({ zone, side, row: r, start: minSeat, end: maxSeat, price: activePaint.price, color: activePaint.color });
+            if (activePaint.price !== 0) priceSettings.rules.push({ zone, row: r, start: minSeat, end: maxSeat, price: activePaint.price, color: activePaint.color });
         }
         
         paintStart = null;
@@ -840,7 +840,6 @@ document.body.addEventListener('click', async e => {
     return;
   }
 
-  // Если был выбран 1 клик, но мы кликнули мимо (сюда не попадает, но для сброса)
   if (paintStart && paintStart.applySingle) { paintStart.applySingle(); paintStart = null; document.querySelectorAll('.painting').forEach(el => el.classList.remove('painting')); }
 
   if (isAdminMode && adminActionMode === 'block') {
@@ -867,7 +866,6 @@ document.body.addEventListener('click', async e => {
   updateBar();
 });
 
-// Сброс одиночного выделения при клике вне мест
 document.addEventListener('click', (e) => {
     if (paintStart && paintStart.applySingle && !e.target.closest('.seat')) {
         paintStart.applySingle();
@@ -1078,7 +1076,11 @@ function seatsText(){
     let parts = key.split('-'); let zone = 'Балкон'; let r, c;
     if (parts[0] === 'parterre') { zone = 'Партер'; r = parts[1]; c = parts[2]; }
     else if (parts[0] === 'central') { zone = 'Центр. балкон'; r = parts[1]; c = parts[2]; }
-    else if (parts[0] === 'balc') { zone = parts[1] === 'left' ? 'Левый балкон' : 'Правый балкон'; r = parts[2]; c = parts[3]; }
+    else if (parts[0] === 'balc') { 
+        if (parts[2] === 'a') zone = (parts[1] === 'left' ? 'Левый' : 'Правый') + ' балкон А';
+        else if (parts[2] === 'b') zone = (parts[1] === 'left' ? 'Левый' : 'Правый') + ' балкон Б';
+        r = parts[3]; c = parts[4]; 
+    }
     if(!groups[`${zone} Ряд ${r}`]) groups[`${zone} Ряд ${r}`] = [];
     groups[`${zone} Ряд ${r}`].push(Number(c));
   }
@@ -1146,8 +1148,10 @@ async function searchTickets() {
         let zone = 'Балкон'; let row = 0, seat = 0;
         if (t.seat_key.startsWith('parterre-')) { zone = 'Партер'; const p = t.seat_key.split('-'); row = p[1]; seat = p[2]; }
         else if (t.seat_key.startsWith('central-')) { zone = 'Центр. балкон'; const p = t.seat_key.split('-'); row = p[1]; seat = p[2]; }
-        else if (t.seat_key.startsWith('balc-left-')) { zone = 'Левый балкон'; const p = t.seat_key.split('-'); row = p[2]; seat = p[3]; }
-        else if (t.seat_key.startsWith('balc-right-')) { zone = 'Правый балкон'; const p = t.seat_key.split('-'); row = p[2]; seat = p[3]; }
+        else if (t.seat_key.startsWith('balc-left-a-')) { zone = 'Левый балкон А'; const p = t.seat_key.split('-'); row = p[3]; seat = p[4]; }
+        else if (t.seat_key.startsWith('balc-left-b-')) { zone = 'Левый балкон Б'; const p = t.seat_key.split('-'); row = p[3]; seat = p[4]; }
+        else if (t.seat_key.startsWith('balc-right-a-')) { zone = 'Правый балкон А'; const p = t.seat_key.split('-'); row = p[3]; seat = p[4]; }
+        else if (t.seat_key.startsWith('balc-right-b-')) { zone = 'Правый балкон Б'; const p = t.seat_key.split('-'); row = p[3]; seat = p[4]; }
         
         let reserveInfo = '';
         if (t.reserve_firstname && t.reserve_lastname) {
