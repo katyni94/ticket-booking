@@ -23,14 +23,17 @@
     background-image: var(--bg-image);
     background-size: var(--bg-size);
     background-position: var(--bg-pos);
-    background-attachment: fixed;
     background-repeat: no-repeat;
     position: relative;
     transition: padding-right 0.3s;
   }
   
+  /* Убираем fixed для фона на мобильных, чтобы не было багов */
+  @media (min-width: 769px) {
+    body { background-attachment: fixed; }
+  }
+
   body.admin-mode { padding-right: 360px; }
-  @media (max-width: 900px) { body.admin-mode { padding-right: 0; } }
 
   body::before {
     content: ""; position: fixed; inset: 0;
@@ -147,6 +150,26 @@
   #tooltip .t-row { font-weight: 700; font-size: 15px; margin-bottom: 2px; color: #000; }
   #tooltip .t-zone { color: #666; font-size: 12px; margin-bottom: 4px; }
   #tooltip .t-price { font-weight: 600; color: #222; }
+
+  /* СТИЛИ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ */
+  @media (max-width: 768px) {
+    body { padding: 10px 5px 120px; }
+    body.admin-mode { padding-right: 0; }
+    body.admin-mode .bar { padding-right: 0; }
+    #adminSidebar { width: 100%; right: -100%; }
+    body.admin-mode #adminSidebar { right: 0; }
+    
+    .seat { width: 14px; height: 14px; font-size: 7px; border-radius: 3px 3px 1px 1px; }
+    .row { gap: 2px; margin-bottom: 2px; }
+    .dj-booth, .wall-block { height: 14px; font-size: 8px; }
+    .aisle { height: 14px; }
+    .hall-layout { gap: 10px; }
+    
+    .event-switch { flex-direction: column; width: 100%; max-width: 300px; }
+    .bar { padding: 8px; gap: 8px; }
+    .btn { padding: 8px 12px; font-size: 12px; }
+    body.admin-mode #paintPalette { transform: translateX(-50%); bottom: 140px; }
+  }
 </style>
 </head>
 <body>
@@ -154,7 +177,7 @@
 <h1>Концертный зал</h1>
 <div class="sub">25 ноября в 19:00</div>
 
-<div class="event-switch">
+<div class="event-switch" id="eventSwitch">
   <button id="btn-event-left" class="active" onclick="switchEvent('left')">Танцы без возраста (Левая часть)</button>
   <button id="btn-event-right" onclick="switchEvent('right')">Живи ярче (Правая часть)</button>
 </div>
@@ -209,6 +232,14 @@
 <div id="adminSidebar">
   <h2 style="margin-top:0;">Панель управления</h2>
   
+  <!-- БЛОК СТАТИСТИКИ -->
+  <div class="sidebar-section">
+    <label>Статистика (Левая)</label>
+    <div id="stats-left" style="font-size:12px; line-height:1.6;"></div>
+    <label style="margin-top:10px;">Статистика (Правая)</label>
+    <div id="stats-right" style="font-size:12px; line-height:1.6;"></div>
+  </div>
+
   <div class="sidebar-section">
     <label>Режим работы</label>
     <select id="adminModeSelect" class="mode-select">
@@ -355,6 +386,7 @@ const POLL_MS = 5000;
 const ADMIN_PASSWORD = "admin123";
 let currentEvent = 'left';
 let CURRENT_MAX_SEATS = 4;
+let forcedSideMode = null; // Для ссылок ?side=left или ?side=right
 
 let bookedSet = new Set();
 let selected  = new Set();
@@ -389,6 +421,18 @@ const leftBalcAConf = [{ rowNum: 4, present: (r) => r >= 2 }, { rowNum: 3, prese
 const leftBalcBConf = [{ rowNum: 2, present: (r) => (r >= 1 && r <= 5) || r >= 9 }, { rowNum: 1, present: (r) => (r >= 0 && r <= 5) || r >= 9 }];
 const rightBalcAConf = [{ rowNum: 1, present: (r) => true }, { rowNum: 2, present: (r) => r >= 1 }, { rowNum: 3, present: (r) => true }, { rowNum: 4, present: (r) => r >= 1 }];
 const rightBalcBConf = [{ rowNum: 1, present: (r) => (r >= 0 && r <= 5) || r >= 9 }, { rowNum: 2, present: (r) => (r >= 1 && r <= 5) || r >= 9 }];
+
+// Проверяем URL на наличие параметра side
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('side') === 'left') forcedSideMode = 'left';
+if (urlParams.get('side') === 'right') forcedSideMode = 'right';
+
+if (forcedSideMode) {
+    currentEvent = forcedSideMode;
+    document.getElementById('eventSwitch').style.display = 'none'; // Скрываем переключатель
+    document.getElementById('btn-event-left').style.display = 'none';
+    document.getElementById('btn-event-right').style.display = 'none';
+}
 
 function getEventSide(zone, row, seatNum) {
   if (zone.includes('left-balc')) return 'left';
@@ -439,6 +483,7 @@ function createSeat(key, num, title, color, price, side, zoneName, rowNum) {
   
   if (side !== currentEvent) btn.classList.add('disabled');
   if (priceSettings.hidden && priceSettings.hidden[side]) btn.classList.add('hidden-side');
+  if (forcedSideMode && side !== forcedSideMode) btn.classList.add('hidden-side'); // Принудительно скрываем чужую сторону
   
   if (bookedSet.has(key)) {
     if (bookedSet.has(key + '_blocked')) btn.classList.add('blocked');
@@ -449,7 +494,8 @@ function createSeat(key, num, title, color, price, side, zoneName, rowNum) {
 }
 
 function switchEvent(event) { 
-  if (priceSettings.hidden && priceSettings.hidden[event]) return; // Блокируем переключение, если скрыто
+  if (forcedSideMode) return; // Нельзя переключиться
+  if (priceSettings.hidden && priceSettings.hidden[event]) return; 
   currentEvent = event; 
   document.getElementById('btn-event-left').classList.toggle('active', event === 'left'); 
   document.getElementById('btn-event-right').classList.toggle('active', event === 'right'); 
@@ -514,13 +560,53 @@ function render() {
   renderBalcony('right-balc-a', rightBalcAConf, 18, 'Правый балкон А', 'right');
   renderBalcony('right-balc-b', rightBalcBConf, 20, 'Правый балкон Б', 'right');
   
-  // Управление кнопками половин
   const btnL = document.getElementById('btn-event-left');
   const btnR = document.getElementById('btn-event-right');
-  btnL.style.display = (priceSettings.hidden && priceSettings.hidden.left) ? 'none' : 'inline-block';
-  btnR.style.display = (priceSettings.hidden && priceSettings.hidden.right) ? 'none' : 'inline-block';
+  if (!forcedSideMode) {
+      btnL.style.display = (priceSettings.hidden && priceSettings.hidden.left) ? 'none' : 'inline-block';
+      btnR.style.display = (priceSettings.hidden && priceSettings.hidden.right) ? 'none' : 'inline-block';
+  }
   
-  updateBar(); renderLegend(); updateHideButtons();
+  updateBar(); renderLegend(); updateHideButtons(); updateStats();
+}
+
+function updateStats() {
+    let L_total = 0, L_free = 0, L_booked = 0, L_blocked = 0;
+    let R_total = 0, R_free = 0, R_booked = 0, R_blocked = 0;
+    
+    document.querySelectorAll('.seat').forEach(seat => {
+        const side = seat.dataset.side;
+        const isBooked = seat.classList.contains('booked');
+        const isBlocked = seat.classList.contains('blocked');
+        
+        if (side === 'left') {
+            if (isBlocked) { L_blocked++; }
+            else {
+                L_total++;
+                if (isBooked) L_booked++; else L_free++;
+            }
+        } else if (side === 'right') {
+            if (isBlocked) { R_blocked++; }
+            else {
+                R_total++;
+                if (isBooked) R_booked++; else R_free++;
+            }
+        }
+    });
+
+    document.getElementById('stats-left').innerHTML = `
+        Всего: <b>${L_total}</b><br>
+        Свободно: <span style="color:#f59e0b">${L_free}</span><br>
+        Забронировано: <span style="color:#f87171">${L_booked}</span><br>
+        Заблокировано: <span style="color:#ccc">${L_blocked}</span>
+    `;
+    
+    document.getElementById('stats-right').innerHTML = `
+        Всего: <b>${R_total}</b><br>
+        Свободно: <span style="color:#f59e0b">${R_free}</span><br>
+        Забронировано: <span style="color:#f87171">${R_booked}</span><br>
+        Заблокировано: <span style="color:#ccc">${R_blocked}</span>
+    `;
 }
 
 function renderLegend() {
@@ -586,8 +672,11 @@ async function loadSettings() {
     document.getElementById('set-max-seats').value = priceSettings.maxSeats || 4;
     document.getElementById('set-restrict-admin').checked = priceSettings.restrictAdminSeats !== false;
     
-    if (priceSettings.hidden.left && currentEvent === 'left') currentEvent = 'right';
-    if (priceSettings.hidden.right && currentEvent === 'right') currentEvent = 'left';
+    // Если админ скрыл часть, принудительно переключаем на доступную (если не задан режим ссылки)
+    if (!forcedSideMode) {
+        if (priceSettings.hidden.left && currentEvent === 'left') currentEvent = 'right';
+        if (priceSettings.hidden.right && currentEvent === 'right') currentEvent = 'left';
+    }
     
     updateBgPreview(); renderGroups(); render();
   } catch (e) { console.error('Ошибка загрузки настроек'); }
@@ -708,8 +797,10 @@ async function toggleHide(side) {
   if (!priceSettings.hidden) priceSettings.hidden = { left: false, right: false };
   priceSettings.hidden[side] = !priceSettings.hidden[side];
   
-  if (priceSettings.hidden.left && currentEvent === 'left') currentEvent = 'right';
-  if (priceSettings.hidden.right && currentEvent === 'right') currentEvent = 'left';
+  if (!forcedSideMode) {
+      if (priceSettings.hidden.left && currentEvent === 'left') currentEvent = 'right';
+      if (priceSettings.hidden.right && currentEvent === 'right') currentEvent = 'left';
+  }
   
   updateHideButtons(); render();
   
