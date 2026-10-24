@@ -17,6 +17,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 let appSettings = {
   basePrice: 600,
+  colorPrices: { '#FFC000': 600, '#FFFF00': 800, '#92D050': 1000, '#C55A11': 1100, '#00B0F0': 1300, '#B4A7D6': 1400, '#F4B183': 1500 },
   rules: [],
   hidden: { left: false, right: false },
   maxSeats: 4,
@@ -40,7 +41,6 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    // Миграции
     await pool.query(`ALTER TABLE bookings ALTER COLUMN seat_key TYPE VARCHAR(50);`).catch(()=>{});
     await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS firstname VARCHAR(50);`).catch(()=>{});
     await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS lastname VARCHAR(50);`).catch(()=>{});
@@ -232,7 +232,13 @@ app.get('/api/admin/export', async (req, res) => {
       if (appSettings.rules) {
         for (let i = appSettings.rules.length - 1; i >= 0; i--) {
           let r = appSettings.rules[i];
-          if (r.zone === zone && row == r.row && seat >= r.start && seat <= r.end) return r.price;
+          if (r.zone === zone && row == r.row && seat >= r.start && seat <= r.end) {
+            // Используем новый справочник цветов
+            if (r.color && appSettings.colorPrices && appSettings.colorPrices[r.color] !== undefined) {
+                return appSettings.colorPrices[r.color];
+            }
+            return r.price || appSettings.basePrice || 600;
+          }
         }
       }
       return appSettings.basePrice || 600;
