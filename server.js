@@ -20,7 +20,11 @@ let appSettings = {
   rules: [],
   hidden: { left: false, right: false },
   maxSeats: 4,
-  bgUrl: '' // Ссылка на картинку
+  bgUrl: '',
+  bgSize: 'cover',
+  bgPosX: 50,
+  bgPosY: 50,
+  restrictAdminSeats: true // Галочка ограничения для админа
 };
 
 async function initDB() {
@@ -52,7 +56,6 @@ async function initDB() {
     } else {
       await pool.query("INSERT INTO settings (key, value) VALUES ('app_settings', $1)", [appSettings]);
     }
-
     console.log('База данных готова к работе');
   } catch (err) {
     console.error('Ошибка инициализации БД:', err);
@@ -102,10 +105,12 @@ app.get('/api/limit', async (req, res) => {
 });
 
 app.post('/api/bookings', async (req, res) => {
-  const { seats, fullname, phone } = req.body || {};
+  const { seats, fullname, phone, adminPass } = req.body || {};
   if (!Array.isArray(seats) || seats.length === 0) return res.status(400).json({ error: 'Не выбраны места' });
   const digits = String(phone || '').replace(/\D/g, '');
   if (typeof fullname !== 'string' || fullname.trim().length < 2 || digits.length < 10) return res.status(400).json({ error: 'Проверьте имя и телефон' });
+
+  const isAdminOverride = (adminPass === ADMIN_PASSWORD); // Проверяем, админ ли обходит лимит
 
   const client = await pool.connect();
   try {
@@ -122,7 +127,9 @@ app.post('/api/bookings', async (req, res) => {
       [normPhone]
     );
     const used = parseInt(countRows[0].count, 10);
-    if (used + seats.length > appSettings.maxSeats) {
+    
+    // Если это НЕ админ-обход, проверяем лимит
+    if (!isAdminOverride && (used + seats.length > appSettings.maxSeats)) {
       await client.query('ROLLBACK');
       return res.status(409).json({ error: `На этот номер уже забронировано ${used} мест. Максимум: ${appSettings.maxSeats}.` });
     }
@@ -138,6 +145,9 @@ app.post('/api/bookings', async (req, res) => {
     res.status(500).json({ error: 'Ошибка при бронировании: ' + err.message });
   } finally { client.release(); }
 });
+
+// Остальные эндпоинты (my-bookings, cancel, toggle-block, unblock-all, export, admin) остаются без изменений...
+// ... (скопируйте их из предыдущего рабочего server.js) ...
 
 app.get('/api/my-bookings', async (req, res) => {
   const phone = req.query.phone;
