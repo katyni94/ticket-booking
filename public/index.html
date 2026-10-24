@@ -47,6 +47,18 @@
   .seat.booked{background:var(--booked) !important; color:transparent; cursor:not-allowed;}
   .seat.blocked{background:var(--blocked) !important; color:transparent; cursor:pointer; border:1px solid #333;}
   .seat.disabled{opacity: 0.15; cursor: not-allowed; filter: grayscale(100%);}
+  
+  /* Стили для скрытых мест */
+  .seat.hidden-side {
+    opacity: 0.1;
+    pointer-events: none;
+    filter: grayscale(100%);
+  }
+  body.admin-mode .seat.hidden-side {
+    opacity: 0.3;
+    pointer-events: auto;
+    border: 1px dashed #fff;
+  }
 
   .legend{display:flex; gap:15px; flex-wrap:wrap; justify-content:center; margin:15px 0; font-size:12px; color:var(--muted)}
   .legend span{display:flex; align-items:center; gap:5px}
@@ -181,8 +193,9 @@
   
   <button class="btn admin" id="adminBtn">Войти как Админ</button>
   
-  <button class="btn bulk" id="blockLeftBtn" style="display:none;" onclick="toggleHalf('left')">Блок: Танцы без возраста</button>
-  <button class="btn bulk" id="blockRightBtn" style="display:none;" onclick="toggleHalf('right')">Блок: Живи ярче</button>
+  <button class="btn bulk" id="hideLeftBtn" style="display:none;" onclick="toggleHide('left')">Скрыть левую</button>
+  <button class="btn bulk" id="hideRightBtn" style="display:none;" onclick="toggleHide('right')">Скрыть правую</button>
+  <button class="btn primary" id="exportBtn" style="display:none; background:#22c55e;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD, '_blank')">📥 Excel</button>
 
   <select id="adminModeSelect" class="mode-block">
     <option value="block">🛠 Блокировка</option>
@@ -237,8 +250,17 @@
         <input type="number" id="quick-start" value="1" style="width:50px; padding:6px; border-radius:6px; border:1px solid #2a3446; background:#111721; color:var(--text); margin:0;">
         <span style="font-size:13px;">по</span>
         <input type="number" id="quick-end" value="5" style="width:50px; padding:6px; border-radius:6px; border:1px solid #2a3446; background:#111721; color:var(--text); margin:0;">
-        <input type="number" id="quick-price" placeholder="Цена" value="1500" style="width:70px; padding:6px; border-radius:6px; border:1px solid #2a3446; background:#111721; color:var(--text); margin:0;">
-        <input type="color" id="quick-color" value="#ef4444" style="width:40px; height:30px; padding:0; border:none; border-radius:4px; background:none; cursor:pointer;">
+        
+        <select id="quick-color" style="width:110px; padding:6px; border-radius:6px; border:1px solid #2a3446; background:#111721; color:var(--text); margin:0;">
+          <option value="#FFC000">600 ₽</option>
+          <option value="#FFFF00">800 ₽</option>
+          <option value="#92D050">1000 ₽</option>
+          <option value="#C55A11">1100 ₽</option>
+          <option value="#00B0F0">1300 ₽</option>
+          <option value="#B4A7D6">1400 ₽</option>
+          <option value="#F4B183">1500 ₽</option>
+        </select>
+
         <button type="button" class="btn primary" onclick="applyQuickRule()">Применить</button>
       </div>
     </div>
@@ -306,26 +328,25 @@ const tanci_parterre = {
 };
 const tanci_central = { 1: [14, 27], 2: [14, 28], 3: [15, 30], 4: [16, 31], 5: [15, 28] };
 
-// ИСПРАВЛЕННЫЕ КОНФИГИ ДЛЯ БАЛКОНОВ
 const leftBalcAConf = [
-    { rowNum: 4, present: (r) => r >= 2 }, // Левая колонка (Ряд 4)
-    { rowNum: 3, present: (r) => r >= 1 }, // Ряд 3
-    { rowNum: 2, present: (r) => r >= 1 }, // Ряд 2
-    { rowNum: 1, present: (r) => true }    // Правая колонка (Ряд 1)
+    { rowNum: 4, present: (r) => r >= 2 },
+    { rowNum: 3, present: (r) => r >= 1 },
+    { rowNum: 2, present: (r) => r >= 1 },
+    { rowNum: 1, present: (r) => true }
 ];
 const leftBalcBConf = [
-    { rowNum: 2, present: (r) => (r >= 1 && r <= 5) || r >= 9 }, // Левая колонка (Ряд 2)
-    { rowNum: 1, present: (r) => (r >= 0 && r <= 5) || r >= 9 }  // Правая колонка (Ряд 1)
+    { rowNum: 2, present: (r) => (r >= 1 && r <= 5) || r >= 9 },
+    { rowNum: 1, present: (r) => (r >= 0 && r <= 5) || r >= 9 }
 ];
 const rightBalcAConf = [
-    { rowNum: 1, present: (r) => true },    // Левая колонка (Ряд 1)
-    { rowNum: 2, present: (r) => r >= 1 },  // Ряд 2
-    { rowNum: 3, present: (r) => true },    // Ряд 3
-    { rowNum: 4, present: (r) => r >= 1 }   // Правая колонка (Ряд 4)
+    { rowNum: 1, present: (r) => true },
+    { rowNum: 2, present: (r) => r >= 1 },
+    { rowNum: 3, present: (r) => true },
+    { rowNum: 4, present: (r) => r >= 1 }
 ];
 const rightBalcBConf = [
-    { rowNum: 1, present: (r) => (r >= 0 && r <= 5) || r >= 9 }, // Левая колонка (Ряд 1)
-    { rowNum: 2, present: (r) => (r >= 1 && r <= 5) || r >= 9 }  // Правая колонка (Ряд 2)
+    { rowNum: 1, present: (r) => (r >= 0 && r <= 5) || r >= 9 },
+    { rowNum: 2, present: (r) => (r >= 1 && r <= 5) || r >= 9 }
 ];
 
 function getEventSide(zone, row, seatNum) {
@@ -383,7 +404,12 @@ function createSeat(key, num, title, color, price, side, zoneName, rowNum) {
   btn.type = 'button'; btn.className = 'seat'; btn.dataset.key = key; btn.dataset.side = side; btn.dataset.zone = zoneName;
   btn.dataset.row = rowNum; btn.dataset.seat = num; btn.dataset.price = price; btn.textContent = num;
   btn.style.background = color;
+  
   if (side !== currentEvent) btn.classList.add('disabled');
+  
+  if (priceSettings.hidden && priceSettings.hidden[side]) {
+      btn.classList.add('hidden-side');
+  }
   
   if (bookedSet.has(key)) {
     if (bookedSet.has(key + '_blocked')) {
@@ -404,16 +430,15 @@ function switchEvent(event) {
   render();
 }
 
-// НОВАЯ ФУНКЦИЯ ОТРИСОВКИ БАЛКОНОВ
 function renderBalcony(containerId, config, totalSeats, zoneName, side) {
   const container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = '';
   
-  for (let r = 0; r < totalSeats; r++) { // r=0 (верхний ряд) до r=17 (нижний)
+  for (let r = 0; r < totalSeats; r++) {
     const rowDiv = document.createElement('div');
     rowDiv.className = 'row';
-    const seatNum = totalSeats - r; // Считаем снизу вверх (место 1 в самом низу)
+    const seatNum = totalSeats - r;
     
     for (let c = 0; c < config.length; c++) {
       const colConf = config[c];
@@ -484,7 +509,7 @@ function render() {
   
   updateBar();
   renderLegend();
-  updateHalfButtons();
+  updateHideButtons();
 }
 
 function renderLegend() {
@@ -510,33 +535,11 @@ function updateBar(){
   document.getElementById('bookBtn').disabled = selected.size === 0;
 }
 
-// ФУНКЦИЯ ОБНОВЛЕНИЯ ТЕКСТА КНОПОК МАССОВОЙ БЛОКИРОВКИ
-function updateHalfButtons() {
-    const leftBtn = document.getElementById('blockLeftBtn');
-    const rightBtn = document.getElementById('blockRightBtn');
+function updateHideButtons() {
     if (!isAdminMode) return;
-
-    let leftBlocked = true, leftSeats = 0;
-    let rightBlocked = true, rightSeats = 0;
-
-    document.querySelectorAll('.seat').forEach(seat => {
-        const side = seat.dataset.side;
-        if (!seat.classList.contains('booked')) {
-            if (side === 'left') {
-                leftSeats++;
-                if (!seat.classList.contains('blocked')) leftBlocked = false;
-            } else if (side === 'right') {
-                rightSeats++;
-                if (!seat.classList.contains('blocked')) rightBlocked = false;
-            }
-        }
-    });
-
-    if (leftSeats === 0) leftBlocked = false;
-    if (rightSeats === 0) rightBlocked = false;
-
-    leftBtn.textContent = leftBlocked ? 'Разблокировать: Танцы' : 'Заблокировать: Танцы';
-    rightBtn.textContent = rightBlocked ? 'Разблокировать: Живи ярче' : 'Заблокировать: Живи ярче';
+    if (!priceSettings.hidden) priceSettings.hidden = { left: false, right: false };
+    document.getElementById('hideLeftBtn').textContent = priceSettings.hidden.left ? 'Показать левую' : 'Скрыть левую';
+    document.getElementById('hideRightBtn').textContent = priceSettings.hidden.right ? 'Показать правую' : 'Скрыть правую';
 }
 
 async function loadSettings() {
@@ -544,8 +547,9 @@ async function loadSettings() {
     const res = await fetch('/api/settings');
     priceSettings = await res.json();
     if (!priceSettings || Object.keys(priceSettings).length === 0) {
-      priceSettings = { default: { price: 600, color: '#2a3342' }, rules: [] };
+      priceSettings = { default: { price: 600, color: '#2a3342' }, rules: [], hidden: { left: false, right: false } };
     }
+    if (!priceSettings.hidden) priceSettings.hidden = { left: false, right: false };
     render();
   } catch (e) { console.error('Ошибка загрузки настроек'); }
 }
@@ -589,6 +593,8 @@ document.body.addEventListener('mouseout', e => {
 document.body.addEventListener('click', async e => {
   const btn = e.target.closest('.seat');
   if (!btn) return;
+  
+  if (!isAdminMode && btn.classList.contains('hidden-side')) return;
   
   const key = btn.dataset.key;
   const zone = btn.dataset.zone.toLowerCase().includes('партер') ? 'parterre' : (btn.dataset.zone.toLowerCase().includes('балкон') ? 'balcon' : 'central');
@@ -639,45 +645,20 @@ async function toggleBlock(seatKey) {
   } catch (e) { alert('Ошибка сети: ' + e.message); }
 }
 
-// МАССОВАЯ БЛОКИРОВКА
-async function toggleHalf(side) {
-    const btn = side === 'left' ? document.getElementById('blockLeftBtn') : document.getElementById('blockRightBtn');
-    const isBlocking = btn.textContent.includes('Заблокировать');
-    const action = isBlocking ? 'block' : 'unblock';
-    const seatsToProcess = [];
-    
-    document.querySelectorAll('.seat').forEach(seatBtn => {
-        const seatSide = seatBtn.dataset.side;
-        if (seatSide === side) {
-            if (isBlocking && !seatBtn.classList.contains('booked') && !seatBtn.classList.contains('blocked')) {
-                seatsToProcess.push(seatBtn.dataset.key);
-            } else if (!isBlocking && seatBtn.classList.contains('blocked')) {
-                seatsToProcess.push(seatBtn.dataset.key);
-            }
-        }
+async function toggleHide(side) {
+  if (!priceSettings.hidden) priceSettings.hidden = { left: false, right: false };
+  priceSettings.hidden[side] = !priceSettings.hidden[side];
+  
+  updateHideButtons();
+  render();
+  
+  try {
+    await fetch(`/api/admin/settings?pass=${ADMIN_PASSWORD}`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(priceSettings)
     });
-
-    if (seatsToProcess.length === 0) return showToast('Нет подходящих мест для ' + (isBlocking ? 'блокировки' : 'разблокировки'));
-    if (!confirm(`Вы уверены, что хотите ${isBlocking ? 'ЗАБЛОКИРОВАТЬ' : 'РАЗБЛОКИРОВАТЬ'} все места на стороне "${side === 'left' ? 'Танцы без возраста' : 'Живи ярче'}"?`)) return;
-
-    btn.disabled = true; btn.textContent = 'Обработка...';
-    try {
-        const res = await fetch(`/api/admin/bulk-block?pass=${ADMIN_PASSWORD}`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ seats: seatsToProcess, action })
-        });
-        if (res.ok) {
-            showToast('Готово!');
-            loadBookings();
-        } else {
-            alert('Ошибка сервера');
-            btn.disabled = false; updateHalfButtons();
-        }
-    } catch (e) {
-        alert('Ошибка сети'); btn.disabled = false; updateHalfButtons();
-    }
+  } catch(e) { alert('Ошибка сохранения'); }
 }
 
-// ПЕРЕКЛЮЧАТЕЛЬ РЕЖИМОВ АДМИНА
 const adminModeSelect = document.getElementById('adminModeSelect');
 adminModeSelect.addEventListener('change', (e) => {
     adminActionMode = e.target.value;
@@ -714,27 +695,33 @@ async function savePaintSettings() {
 document.getElementById('adminBtn').addEventListener('click', () => {
   if (isAdminMode) {
     isAdminMode = false;
+    document.body.classList.remove('admin-mode');
     document.getElementById('adminBtn').classList.remove('active');
     document.getElementById('adminBtn').textContent = 'Войти как Админ';
     document.getElementById('settingsBtn').style.display = 'none';
     adminModeSelect.style.display = 'none';
-    document.getElementById('blockLeftBtn').style.display = 'none';
-    document.getElementById('blockRightBtn').style.display = 'none';
+    document.getElementById('hideLeftBtn').style.display = 'none';
+    document.getElementById('hideRightBtn').style.display = 'none';
+    document.getElementById('exportBtn').style.display = 'none';
     adminActionMode = 'block'; adminModeSelect.value = 'block';
     adminModeSelect.classList.remove('mode-book', 'mode-paint');
     document.getElementById('paintPalette').style.display = 'none';
+    render();
     showToast('Режим админа выключен');
   } else {
     const pass = prompt('Введите пароль:');
     if (pass === ADMIN_PASSWORD) {
       isAdminMode = true;
+      document.body.classList.add('admin-mode');
       document.getElementById('adminBtn').classList.add('active');
       document.getElementById('adminBtn').textContent = 'Выйти из Админа';
       document.getElementById('settingsBtn').style.display = 'inline-block';
       adminModeSelect.style.display = 'inline-block';
-      document.getElementById('blockLeftBtn').style.display = 'inline-block';
-      document.getElementById('blockRightBtn').style.display = 'inline-block';
-      updateHalfButtons();
+      document.getElementById('hideLeftBtn').style.display = 'inline-block';
+      document.getElementById('hideRightBtn').style.display = 'inline-block';
+      document.getElementById('exportBtn').style.display = 'inline-block';
+      updateHideButtons();
+      render();
       showToast('Выберите режим работы');
     } else if (pass !== null) alert('Неверный пароль');
   }
@@ -751,8 +738,12 @@ function openSettings() {
 function applyQuickRule() {
     const start = Number(document.getElementById('quick-start').value);
     const end = Number(document.getElementById('quick-end').value);
-    const price = Number(document.getElementById('quick-price').value);
     const color = document.getElementById('quick-color').value;
+    const priceMap = {
+      '#FFC000': 600, '#FFFF00': 800, '#92D050': 1000, '#C55A11': 1100, '#00B0F0': 1300, '#B4A7D6': 1400, '#F4B183': 1500
+    };
+    const price = priceMap[color] || 600;
+    
     if (start > end) return alert('Начальный ряд не может быть больше конечного');
     if (!priceSettings.rules) priceSettings.rules = [];
     for (let r = start; r <= end; r++) {
@@ -767,7 +758,8 @@ async function saveSettings() {
   try {
     const newSettings = {
       default: { price: Number(document.getElementById('set-default-price').value) || 600, color: document.getElementById('set-default-color').value },
-      rules: priceSettings.rules || []
+      rules: priceSettings.rules || [],
+      hidden: priceSettings.hidden || { left: false, right: false }
     };
     const res = await fetch(`/api/admin/settings?pass=${ADMIN_PASSWORD}`, {
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newSettings)
