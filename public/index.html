@@ -195,6 +195,7 @@
   
   <button class="btn bulk" id="hideLeftBtn" style="display:none;" onclick="toggleHide('left')">Скрыть левую</button>
   <button class="btn bulk" id="hideRightBtn" style="display:none;" onclick="toggleHide('right')">Скрыть правую</button>
+  <button class="btn bulk" id="unblockAllBtn" style="display:none; background:#ef4444; color:white; border:none;" onclick="unblockAll()">Снять все блокировки</button>
   <button class="btn primary" id="exportBtn" style="display:none; background:#22c55e;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD, '_blank')">📥 Excel</button>
 
   <select id="adminModeSelect" class="mode-block">
@@ -659,6 +660,21 @@ async function toggleHide(side) {
   } catch(e) { alert('Ошибка сохранения'); }
 }
 
+async function unblockAll() {
+  if (!confirm('Вы уверены, что хотите СНЯТЬ ВСЕ БЛОКИРОВКИ? (Купленные места останутся на месте)')) return;
+  try {
+    const res = await fetch(`/api/admin/unblock-all?pass=${ADMIN_PASSWORD}`, { method: 'POST' });
+    if (res.ok) {
+      showToast('Все блокировки сняты!');
+      loadBookings();
+    } else {
+      alert('Ошибка сервера');
+    }
+  } catch(e) { 
+    alert('Ошибка сети'); 
+  }
+}
+
 const adminModeSelect = document.getElementById('adminModeSelect');
 adminModeSelect.addEventListener('change', (e) => {
     adminActionMode = e.target.value;
@@ -702,6 +718,7 @@ document.getElementById('adminBtn').addEventListener('click', () => {
     adminModeSelect.style.display = 'none';
     document.getElementById('hideLeftBtn').style.display = 'none';
     document.getElementById('hideRightBtn').style.display = 'none';
+    document.getElementById('unblockAllBtn').style.display = 'none';
     document.getElementById('exportBtn').style.display = 'none';
     adminActionMode = 'block'; adminModeSelect.value = 'block';
     adminModeSelect.classList.remove('mode-book', 'mode-paint');
@@ -719,6 +736,7 @@ document.getElementById('adminBtn').addEventListener('click', () => {
       adminModeSelect.style.display = 'inline-block';
       document.getElementById('hideLeftBtn').style.display = 'inline-block';
       document.getElementById('hideRightBtn').style.display = 'inline-block';
+      document.getElementById('unblockAllBtn').style.display = 'inline-block';
       document.getElementById('exportBtn').style.display = 'inline-block';
       updateHideButtons();
       render();
