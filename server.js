@@ -1,5 +1,6 @@
 const express = require('express');
 const { Pool } = require('pg');
+const ExcelJS = require('exceljs');
 const path = require('path');
 
 const app = express();
@@ -164,24 +165,92 @@ app.post('/api/admin/toggle-block', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
 });
 
-// НОВЫЙ ЭНДПОИНТ ДЛЯ МАССОВОЙ БЛОКИРОВКИ
-app.post('/api/admin/bulk-block', async (req, res) => {
-  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
-  const { seats, action } = req.body;
+// ЭКСПОРТ В EXCEL
+app.get('/api/admin/export', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   try {
-    if (action === 'block') {
-      for (const seat of seats) {
-        const { rows } = await pool.query('SELECT status FROM bookings WHERE seat_key = $1', [seat]);
-        if (rows.length === 0) {
-          await pool.query("INSERT INTO bookings (seat_key, fullname, phone, status) VALUES ($1, 'Админ', 'Заблокировано', 'blocked')", [seat]);
+    const { rows: booked } = await pool.query("SELECT * FROM bookings WHERE status = 'booked' ORDER BY created_at ASC");
+    const { rows: settingsRows } = await pool.query("SELECT value FROM settings WHERE key = 'prices'");
+    const priceSettings = settingsRows.length > 0 ? settingsRows[0].value : { default: { price: 600 } };
+
+    const getPrice = (key) => {
+      let zone = 'balcon';
+      let row = 0, seat = 0;
+      if (key.startsWith('parterre-')) { zone = 'parterre'; const parts = key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
+      else if (key.startsWith('central-')) { zone = 'central'; const parts = key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
+      else if (key.startsWith('balc-')) { const parts = key.split('-'); row = parseInt(parts[2]); seat = parseInt(parts[3]); }
+      
+      if (priceSettings.rules) {
+        for (let i = priceSettings.rules.length - 1; i >= 0; i--) {
+          let r = priceSettings.rules[i];
+          if (r.zone === zone && row == r.row && seat >= r.start && seat <= r.end) return r.price;
         }
       }
-    } else if (action === 'unblock') {
-      await pool.query("DELETE FROM bookings WHERE seat_key = ANY($1) AND status = 'blocked'", [seats]);
-    }
-    res.json({ ok: true });
+      return priceSettings.default ? priceSettings.default.price : 600;
+    };
+
+    const workbook = new ExcelJS.Workbook();
+    
+    // Лист 1: Все билеты
+    const sheet1 = workbook.addWorksheet('Билеты');
+    sheet1.columns = [
+      { header: 'Зона', key: 'zone', width: 20 },
+      { header: 'Ряд', key: 'row', width: 10 },
+      { header: 'Место', key: 'seat', width: 10 },
+      { header: 'Имя', key: 'name', width: 30 },
+      { header: 'Телефон', key: 'phone', width: 20 },
+      { header: 'Сумма', key: 'price', width: 15 }
+    ];
+    
+    // Лист 2: Сводка
+    const sheet2 = workbook.addWorksheet('Сводка');
+    sheet2.columns = [
+      { header: 'Имя', key: 'name', width: 30 },
+      { header: 'Телефон', key: 'phone', width: 20 },
+      { header: 'Кол-во мест', key: 'count', width: 15 },
+      { header: 'Итого сумма', key: 'total', width: 15 }
+    ];
+
+    const summaryMap = {};
+
+    booked.forEach(b => {
+      let zoneName = 'Балкон';
+      let row = 0, seat = 0;
+      
+      if (b.seat_key.startsWith('parterre-')) { zoneName = 'Партер'; const parts = b.seat_key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
+      else if (b.seat_key.startsWith('central-')) { zoneName = 'Центр. балкон'; const parts = b.seat_key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
+      else if (b.seat_key.startsWith('balc-left-')) { zoneName = 'Левый балкон'; const parts = b.seat_key.split('-'); row = parseInt(parts[2]); seat = parseInt(parts[3]); }
+      else if (b.seat_key.startsWith('balc-right-')) { zoneName = 'Правый балкон'; const parts = b.seat_key.split('-'); row = parseInt(parts[2]); seat = parseInt(parts[3]); }
+
+      const price = getPrice(b.seat_key);
+      sheet1.addRow({
+        zone: zoneName,
+        row: row,
+        seat: seat,
+        name: b.fullname,
+        phone: b.phone,
+        price: price
+      });
+
+      const personKey = `${b.fullname}_${b.phone}`;
+      if (!summaryMap[personKey]) {
+        summaryMap[personKey] = { name: b.fullname, phone: b.phone, count: 0, total: 0 };
+      }
+      summaryMap[personKey].count++;
+      summaryMap[personKey].total += price;
+    });
+
+    Object.values(summaryMap).forEach(p => {
+      sheet2.addRow(p);
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="tickets.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).send('Ошибка экспорта: ' + err.message);
   }
 });
 
