@@ -81,7 +81,6 @@
   #adminBtn:hover { opacity: 1; }
   body.admin-mode #adminBtn { display: none; }
 
-  /* БОКОВАЯ ПАНЕЛЬ АДМИНА */
   #adminSidebar {
     position: fixed; right: -400px; top: 0; width: 380px; height: 100vh;
     background: #171d27; border-left: 1px solid #2a3446; padding: 20px;
@@ -90,7 +89,6 @@
   }
   body.admin-mode #adminSidebar { right: 0; }
   
-  /* Аккордеон */
   details.sidebar-section { background: #111721; border-radius: 8px; border: 1px solid #2a3446; padding: 5px 10px; }
   details.sidebar-section summary { font-size: 13px; font-weight: bold; color: #fff; cursor: pointer; padding: 8px 0; outline: none; user-select: none; }
   details.sidebar-section summary::marker { color: #3b82f6; }
@@ -228,7 +226,7 @@
     <summary>Режим работы</summary>
     <div class="details-content">
       <select id="adminModeSelect" class="mode-select">
-        <option value="block">🛠 Блокировка (не продавать)</option>
+        <option value="block">🛠 Блокировка / Снятие броней</option>
         <option value="book">🎟 Бронирование на клиента</option>
         <option value="paint">🏷 Категории (цены)</option>
       </select>
@@ -385,7 +383,7 @@
   </div>
 </div>
 
-<!-- МОДАЛКА ОТМЕНЫ -->
+<!-- МОДАЛКА ОТМЕНЫ (ДЛЯ КЛИЕНТОВ) -->
 <div class="modal" id="cancelModal" hidden>
   <div class="modal-card">
     <h2>Отмена брони</h2>
@@ -401,6 +399,19 @@
        <div id="seatsToCancel" style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:15px;"></div>
        <button type="button" class="btn primary" style="width:100%; background:#ef4444;" onclick="cancelBookings()">Отменить выбранные</button>
     </div>
+  </div>
+</div>
+
+<!-- НОВАЯ МОДАЛКА: ПРИНУДИТЕЛЬНАЯ ОТМЕНА АДМИНОМ -->
+<div class="modal" id="forceCancelModal" hidden>
+  <div class="modal-card">
+    <h2>Снятие брони</h2>
+    <div id="forceCancelInfo" style="font-size:14px; margin-bottom:20px; line-height:1.6;"></div>
+    <div style="display:flex; gap:10px;">
+      <button type="button" class="btn ghost" style="flex:1" onclick="document.getElementById('forceCancelModal').hidden = true">Отмена</button>
+      <button type="button" class="btn primary" style="flex:1; background:#ef4444;" onclick="confirmForceCancel()">Да, снять</button>
+    </div>
+    <p class="error" id="forceCancelError"></p>
   </div>
 </div>
 
@@ -427,6 +438,7 @@ let adminActionMode = 'block';
 let priceSettings = {};
 let activePaint = null;
 let paintStart = null;
+let currentForceCancelKey = null; // Для модалки админа
 
 const parterreStrings = [
   "-000000000--000000000000000000000--000000000-", // 1
@@ -549,7 +561,6 @@ function getPriceAndColor(zone, side, row, seatNum) {
     for (let i = priceSettings.rules.length - 1; i >= 0; i--) {
       let r = priceSettings.rules[i];
       if (r.zone === zone && row == r.row && seatNum >= r.start && seatNum <= r.end) {
-        // Цена берется из справочника цветов
         const price = priceSettings.colorPrices && priceSettings.colorPrices[r.color] !== undefined ? priceSettings.colorPrices[r.color] : (priceSettings.basePrice || 600);
         return { price: price, color: r.color };
       }
@@ -705,7 +716,6 @@ function renderColorPricesList() {
         `;
         list.appendChild(div);
         
-        // Обновляем подписи на палитре внизу
         const pPriceEl = document.getElementById('p-price-' + c.hex.replace('#', ''));
         if (pPriceEl) pPriceEl.textContent = currentPrice;
     });
@@ -714,11 +724,8 @@ function renderColorPricesList() {
 function updateColorPrice(colorHex, newPrice) {
     if (!priceSettings.colorPrices) priceSettings.colorPrices = {};
     priceSettings.colorPrices[colorHex] = Number(newPrice);
-    
-    // Обновляем подписи на палитре
     const pPriceEl = document.getElementById('p-price-' + colorHex.replace('#', ''));
     if (pPriceEl) pPriceEl.textContent = newPrice;
-    
     render();
 }
 
@@ -836,6 +843,7 @@ document.body.addEventListener('mouseout', e => {
   if (e.target.closest('.seat')) { tooltip.style.display = 'none'; e.target.closest('.seat').classList.remove('painting'); }
 });
 
+// ОБРАБОТКА КЛИКОВ
 document.body.addEventListener('click', async e => {
   const btn = e.target.closest('.seat');
   if (!btn) return;
@@ -901,7 +909,11 @@ document.body.addEventListener('click', async e => {
   if (paintStart && paintStart.applySingle) { paintStart.applySingle(); paintStart = null; document.querySelectorAll('.painting').forEach(el => el.classList.remove('painting')); }
 
   if (isAdminMode && adminActionMode === 'block') {
-    if (btn.classList.contains('booked')) return alert('Это место уже куплено клиентом, его нельзя разблокировать.');
+    if (btn.classList.contains('booked')) {
+      // ВМЕСТО АЛЕРТА ВЫЗЫВАЕМ НОВУЮ МОДАЛКУ
+      openForceCancelModal(key);
+      return;
+    }
     if (btn.classList.contains('blocked')) {
       if(confirm('Разблокировать это место?')) await toggleBlock(key);
     } else {
@@ -923,6 +935,53 @@ document.body.addEventListener('click', async e => {
   }
   updateBar();
 });
+
+// ЛОГИКА ДЛЯ НОВОЙ МОДАЛКИ АДМИНА
+async function openForceCancelModal(seatKey) {
+    currentForceCancelKey = seatKey;
+    document.getElementById('forceCancelError').textContent = '';
+    document.getElementById('forceCancelInfo').innerHTML = 'Загрузка данных...';
+    document.getElementById('forceCancelModal').hidden = false;
+
+    try {
+        const res = await fetch(`/api/admin/booking-info?pass=${ADMIN_PASSWORD}&seat=${seatKey}`);
+        if (!res.ok) throw new Error('Ошибка загрузки');
+        const data = await res.json();
+        
+        let infoText = `<b>Место:</b> ${seatKey}<br>`;
+        infoText += `<b>Фамилия Имя:</b> ${data.lastname} ${data.firstname}<br>`;
+        infoText += `<b>Телефон:</b> ${data.phone}<br>`;
+        if (data.group_name) infoText += `<b>Группа:</b> ${data.group_name}<br>`;
+        if (data.reserve_firstname && data.reserve_lastname) infoText += `<b>Резерв:</b> ${data.reserve_lastname} ${data.reserve_firstname}<br>`;
+        infoText += `<br><span style="color:#f87171;">Вы уверены, что хотите снять эту бронь?</span>`;
+        
+        document.getElementById('forceCancelInfo').innerHTML = infoText;
+    } catch (e) {
+        document.getElementById('forceCancelInfo').textContent = 'Не удалось загрузить данные брони.';
+    }
+}
+
+async function confirmForceCancel() {
+    if (!currentForceCancelKey) return;
+    const errorEl = document.getElementById('forceCancelError');
+    errorEl.textContent = '';
+    try {
+        const res = await fetch(`/api/admin/force-cancel?pass=${ADMIN_PASSWORD}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ seat: currentForceCancelKey })
+        });
+        if (res.ok) {
+            document.getElementById('forceCancelModal').hidden = true;
+            loadBookings();
+            showToast('Бронь успешно снята');
+        } else {
+            errorEl.textContent = 'Ошибка при снятии брони';
+        }
+    } catch (e) {
+        errorEl.textContent = 'Ошибка сети';
+    }
+}
 
 document.addEventListener('click', (e) => {
     if (paintStart && paintStart.applySingle && !e.target.closest('.seat')) {
