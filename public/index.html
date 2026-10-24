@@ -10,6 +10,8 @@
     --accent:#3b82f6; --selected:#f59e0b; --booked:#5a2a36; --blocked:#000000;
     --text:#e6ebf2; --muted:#8b97a8;
     --bg-image: none;
+    --bg-size: cover;
+    --bg-pos: 50% 50%;
   }
   *{box-sizing:border-box}
   body{
@@ -18,14 +20,13 @@
     color:var(--text); display:flex; flex-direction:column; align-items:center;
     background-color: var(--bg);
     background-image: var(--bg-image);
-    background-size: cover;
-    background-position: center top;
+    background-size: var(--bg-size);
+    background-position: var(--bg-pos);
     background-attachment: fixed;
     background-repeat: no-repeat;
     position: relative;
   }
   
-  /* Затемняющий слой поверх картинки, чтобы места было видно */
   body::before {
     content: ""; position: fixed; inset: 0;
     background: rgba(15, 19, 25, 0.85);
@@ -70,7 +71,6 @@
   .legend span{display:flex; align-items:center; gap:5px}
   .dot{width:12px; height:12px; border-radius:3px; display:inline-block}
 
-  /* Нижняя панель (теперь минималистичная) */
   .bar{
     position:fixed; left:0; right:0; bottom:0; background:rgba(23,29,39,.96);
     border-top:1px solid #222b39; padding:10px 16px; display:flex; align-items:center; justify-content:center; gap:15px; flex-wrap:wrap;
@@ -85,7 +85,6 @@
   .btn.admin{background:#7c3aed; color:#fff; margin-left: 15px;}
   .btn.admin.active{background:#ef4444; box-shadow: 0 0 10px #ef4444;}
   
-  /* Выпадающий список */
   select.mode-select {
     width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #2a3446;
     background: #111721; color: #fff; font-weight: bold; font-size: 14px; outline: none; cursor: pointer;
@@ -93,7 +92,6 @@
   select.mode-select.mode-book { border-color: #3b82f6; color: #60a5fa; }
   select.mode-select.mode-paint { border-color: #eab308; color: #facc15; }
 
-  /* ПАНЕЛЬ ПАЛИТРЫ ЦВЕТОВ */
   #paintPalette {
     position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%);
     background: #1f2937; border: 2px solid #eab308; border-radius: 12px;
@@ -109,7 +107,6 @@
   .palette-color { width: 30px; height: 20px; border-radius: 4px; margin-bottom: 4px; border: 1px solid #555; }
   .palette-price { font-size: 11px; font-weight: bold; color: #fff; }
 
-  /* Модалки */
   .modal{position:fixed; inset:0; z-index:200; background:rgba(5,8,12,.8); display:flex; align-items:center; justify-content:center; padding:16px}
   .modal[hidden]{display:none}
   .modal-card{background:var(--panel); border-radius:16px; padding:24px; width:100%; max-width:550px;}
@@ -196,7 +193,6 @@
   <button class="btn primary" style="background:#22c55e; width:100%; margin-top:10px;" onclick="savePaintSettings()">💾 Сохранить цвета</button>
 </div>
 
-<!-- ОБНОВЛЕННАЯ НИЖНЯЯ ПАНЕЛЬ -->
 <div class="bar">
   <div>Выбрано: <b id="count">0</b></div>
   <button class="btn ghost" id="cancelBtnOpen">Отменить бронь</button>
@@ -282,13 +278,31 @@
     
     <div style="background:#1f2937; padding:15px; margin-bottom:15px; border-radius:8px;">
       <div style="font-weight:bold; margin-bottom:15px;">Глобальные настройки</div>
-      <label style="display:block; font-size:13px; margin-bottom:15px; color:var(--muted);">Максимум билетов на 1 человека
+      
+      <label style="display:block; font-size:13px; margin-bottom:15px; color:var(--muted);">Максимум билетов на 1 человека (для клиентов)
         <input type="number" id="set-max-seats" value="4" style="margin-top:5px;">
       </label>
-      <label style="display:block; font-size:13px; color:var(--muted);">Ссылка на фоновую картинку (URL)
+
+      <label style="display:flex; align-items:center; gap:10px; font-size:13px; margin-bottom:15px; color:var(--muted); cursor:pointer;">
+        <input type="checkbox" id="set-restrict-admin" style="width:20px; height:20px; margin:0;">
+        Ограничивать количество мест и для Админа
+      </label>
+
+      <label style="display:block; font-size:13px; margin-bottom:15px; color:var(--muted);">Ссылка на фоновую картинку (URL)
         <input type="url" id="set-bg-url" placeholder="bg.jpg" style="margin-top:5px;">
       </label>
-      <p style="font-size:11px; color:var(--muted); margin-top:10px;">Загрузите картинку в папку `public` на GitHub и напишите её имя (например: bg.jpg)</p>
+
+      <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+        <label style="flex:1; font-size:12px; color:var(--muted);">Размер (cover, contain, %)
+            <input type="text" id="set-bg-size" placeholder="cover" style="margin-top:5px;">
+        </label>
+        <label style="flex:1; font-size:12px; color:var(--muted);">Сдвиг X (0-100%)
+            <input type="number" id="set-bg-posx" placeholder="50" style="margin-top:5px;">
+        </label>
+        <label style="flex:1; font-size:12px; color:var(--muted);">Сдвиг Y (0-100%)
+            <input type="number" id="set-bg-posy" placeholder="50" style="margin-top:5px;">
+        </label>
+      </div>
     </div>
 
     <div style="background:#1f2937; padding:15px; margin-bottom:15px; border-radius:8px;">
@@ -343,6 +357,7 @@ let adminActionMode = 'block';
 let priceSettings = {};
 let activePaint = null;
 
+// (Списки parterreStrings, centralStrings и конфиги балконов остаются как были)
 const parterreStrings = [
   "-000000000-000000000000000000000-000000000-", "--00000000-000000000000000000000-00000000-", "--00000000-000000000000000000000-00000000-",
   "--00000000--00000000000000000000-0000000-", "---------------00000000000000000000-----------", "---00000000-0000000000000000000--00000000-",
@@ -569,20 +584,30 @@ async function loadSettings() {
     const res = await fetch('/api/settings');
     priceSettings = await res.json();
     if (!priceSettings || Object.keys(priceSettings).length === 0) {
-      priceSettings = { default: { price: 600, color: '#2a3342' }, rules: [], hidden: { left: false, right: false }, maxSeats: 4, bgUrl: '' };
+      priceSettings = { default: { price: 600, color: '#2a3342' }, rules: [], hidden: { left: false, right: false }, maxSeats: 4, bgUrl: '', bgSize: 'cover', bgPosX: 50, bgPosY: 50, restrictAdminSeats: true };
     }
     if (!priceSettings.hidden) priceSettings.hidden = { left: false, right: false };
     if (!priceSettings.maxSeats) priceSettings.maxSeats = 4;
+    if (!priceSettings.bgSize) priceSettings.bgSize = 'cover';
+    if (priceSettings.bgPosX === undefined) priceSettings.bgPosX = 50;
+    if (priceSettings.bgPosY === undefined) priceSettings.bgPosY = 50;
+    if (priceSettings.restrictAdminSeats === undefined) priceSettings.restrictAdminSeats = true;
     
     CURRENT_MAX_SEATS = priceSettings.maxSeats;
     
-    if (priceSettings.bgUrl) document.documentElement.style.setProperty('--bg-image', `url('${priceSettings.bgUrl}')`);
-    else document.documentElement.style.setProperty('--bg-image', 'none');
+    if (priceSettings.bgUrl) {
+        document.documentElement.style.setProperty('--bg-image', `url('${priceSettings.bgUrl}')`);
+        document.documentElement.style.setProperty('--bg-size', priceSettings.bgSize);
+        document.documentElement.style.setProperty('--bg-pos', `${priceSettings.bgPosX}% ${priceSettings.bgPosY}%`);
+    } else {
+        document.documentElement.style.setProperty('--bg-image', 'none');
+    }
 
     render();
   } catch (e) { console.error('Ошибка загрузки настроек'); }
 }
 
+// ... (Функции loadBookings, обработчик кликов, toggleBlock, toggleHide, unblockAll остаются как в предыдущем коде) ...
 async function loadBookings(){
   try {
     const res = await fetch('/api/bookings', { cache: 'no-store' });
@@ -622,7 +647,6 @@ document.body.addEventListener('mouseout', e => {
 document.body.addEventListener('click', async e => {
   const btn = e.target.closest('.seat');
   if (!btn) return;
-  
   if (!isAdminMode && btn.classList.contains('hidden-side')) return;
   
   const key = btn.dataset.key;
@@ -659,7 +683,10 @@ document.body.addEventListener('click', async e => {
   if (selected.has(key)) {
     selected.delete(key); btn.classList.remove('selected');
   } else {
-    if (selected.size >= CURRENT_MAX_SEATS) {
+    // ЛОГИКА ЛИМИТА ДЛЯ АДМИНА
+    const shouldLimit = !isAdminMode || (isAdminMode && priceSettings.restrictAdminSeats);
+    
+    if (shouldLimit && selected.size >= CURRENT_MAX_SEATS) {
         return showToast(`На один номер можно забронировать не более ${CURRENT_MAX_SEATS} мест!`, 'error');
     }
     selected.add(key); btn.classList.add('selected');
@@ -679,10 +706,8 @@ async function toggleBlock(seatKey) {
 async function toggleHide(side) {
   if (!priceSettings.hidden) priceSettings.hidden = { left: false, right: false };
   priceSettings.hidden[side] = !priceSettings.hidden[side];
-  
   updateHideButtons();
   render();
-  
   try {
     await fetch(`/api/admin/settings?pass=${ADMIN_PASSWORD}`, {
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(priceSettings)
@@ -699,6 +724,7 @@ async function unblockAll() {
   } catch(e) { alert('Ошибка сети'); }
 }
 
+// ... (Обработчик селекта, вход/выход из админки, настройки) ...
 const adminModeSelect = document.getElementById('adminModeSelect');
 adminModeSelect.addEventListener('change', (e) => {
     adminActionMode = e.target.value;
@@ -735,27 +761,32 @@ async function savePaintSettings() {
   } catch (e) { alert('Ошибка сети'); }
 }
 
-// ВХОД И ВЫХОД ИЗ АДМИНКИ
+// ФУНКЦИЯ ВХОДА
+function loginAdminUI() {
+    isAdminMode = true;
+    document.body.classList.add('admin-mode');
+    document.getElementById('adminBtn').classList.add('active');
+    document.getElementById('adminBtn').textContent = '⚙ Админ-панель';
+    document.getElementById('adminPanelModal').hidden = false;
+    updateHideButtons();
+    render();
+}
+
 document.getElementById('adminBtn').addEventListener('click', () => {
   if (isAdminMode) {
     document.getElementById('adminPanelModal').hidden = false;
-    updateHideButtons();
   } else {
     const pass = prompt('Введите пароль:');
     if (pass === ADMIN_PASSWORD) {
-      isAdminMode = true;
-      document.body.classList.add('admin-mode');
-      document.getElementById('adminBtn').classList.add('active');
-      document.getElementById('adminBtn').textContent = '⚙ Админ-панель';
-      document.getElementById('adminPanelModal').hidden = false;
-      updateHideButtons();
-      render();
+      localStorage.setItem('hall_admin', 'true'); // Сохраняем вход
+      loginAdminUI();
       showToast('Добро пожаловать в админ-панель');
     } else if (pass !== null) alert('Неверный пароль');
   }
 });
 
 function logoutAdmin() {
+    localStorage.removeItem('hall_admin'); // Удаляем память о входе
     isAdminMode = false;
     document.body.classList.remove('admin-mode');
     document.getElementById('adminBtn').classList.remove('active');
@@ -768,10 +799,19 @@ function logoutAdmin() {
     showToast('Вы вышли из режима админа');
 }
 
+// Проверяем память при загрузке страницы
+if (localStorage.getItem('hall_admin') === 'true') {
+    loginAdminUI();
+}
+
 function openSettings() {
   document.getElementById('adminPanelModal').hidden = true;
   document.getElementById('set-max-seats').value = priceSettings.maxSeats || 4;
   document.getElementById('set-bg-url').value = priceSettings.bgUrl || '';
+  document.getElementById('set-bg-size').value = priceSettings.bgSize || 'cover';
+  document.getElementById('set-bg-posx').value = priceSettings.bgPosX !== undefined ? priceSettings.bgPosX : 50;
+  document.getElementById('set-bg-posy').value = priceSettings.bgPosY !== undefined ? priceSettings.bgPosY : 50;
+  document.getElementById('set-restrict-admin').checked = priceSettings.restrictAdminSeats !== false;
   document.getElementById('settingsError').textContent = '';
   document.getElementById('settingsModal').hidden = false;
 }
@@ -782,7 +822,6 @@ function applyQuickRule() {
     const color = document.getElementById('quick-color').value;
     const priceMap = { '#FFC000': 600, '#FFFF00': 800, '#92D050': 1000, '#C55A11': 1100, '#00B0F0': 1300, '#B4A7D6': 1400, '#F4B183': 1500 };
     const price = priceMap[color] || 600;
-    
     if (start > end) return alert('Начальный ряд не может быть больше конечного');
     if (!priceSettings.rules) priceSettings.rules = [];
     for (let r = start; r <= end; r++) {
@@ -797,13 +836,21 @@ async function saveSettings() {
   try {
     const newMax = Number(document.getElementById('set-max-seats').value) || 4;
     const newBg = document.getElementById('set-bg-url').value.trim();
+    const newBgSize = document.getElementById('set-bg-size').value.trim() || 'cover';
+    const newBgPosX = Number(document.getElementById('set-bg-posx').value) || 0;
+    const newBgPosY = Number(document.getElementById('set-bg-posy').value) || 0;
+    const newRestrictAdmin = document.getElementById('set-restrict-admin').checked;
     
     const newSettings = {
       default: priceSettings.default || { price: 600, color: '#2a3342' },
       rules: priceSettings.rules || [],
       hidden: priceSettings.hidden || { left: false, right: false },
       maxSeats: newMax,
-      bgUrl: newBg
+      bgUrl: newBg,
+      bgSize: newBgSize,
+      bgPosX: newBgPosX,
+      bgPosY: newBgPosY,
+      restrictAdminSeats: newRestrictAdmin
     };
     
     const res = await fetch(`/api/admin/settings?pass=${ADMIN_PASSWORD}`, {
@@ -814,10 +861,16 @@ async function saveSettings() {
       priceSettings = newSettings;
       CURRENT_MAX_SEATS = newMax;
       
-      if (newBg) document.documentElement.style.setProperty('--bg-image', `url('${newBg}')`);
-      else document.documentElement.style.setProperty('--bg-image', 'none');
+      if (newBg) {
+          document.documentElement.style.setProperty('--bg-image', `url('${newBg}')`);
+          document.documentElement.style.setProperty('--bg-size', newBgSize);
+          document.documentElement.style.setProperty('--bg-pos', `${newBgPosX}% ${newBgPosY}%`);
+      } else {
+          document.documentElement.style.setProperty('--bg-image', 'none');
+      }
       
       document.getElementById('settingsModal').hidden = true;
+      document.getElementById('adminPanelModal').hidden = false;
       render(); showToast('Настройки сохранены!');
     } else {
       const d = await res.json(); errorEl.textContent = 'Ошибка сервера: ' + (d.error || '');
@@ -854,8 +907,15 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
   if (fullname.length < 2) { errorEl.textContent = 'Введите имя'; return; }
   if (phone.replace(/\D/g,'').length < 10) { errorEl.textContent = 'Введите телефон'; return; }
   const submitBtn = document.getElementById('submitBtn'); submitBtn.disabled = true; submitBtn.textContent = '...';
+  
+  const payload = { seats: [...selected], fullname, phone };
+  // Если это админ и он отключил ограничение - передаем пароль для обхода
+  if (isAdminMode && !priceSettings.restrictAdminSeats) {
+      payload.adminPass = ADMIN_PASSWORD;
+  }
+
   try {
-    const res = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seats: [...selected], fullname, phone }) });
+    const res = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const data = await res.json();
     if (!res.ok) { errorEl.textContent = data.error; if (res.status === 409) await loadBookings(); return; }
     selected.clear(); document.getElementById('modal').hidden = true; loadBookings(); showToast('Успешно забронировано!');
@@ -897,7 +957,6 @@ function showToast(msg, type = 'success') {
   const toast = document.getElementById('toast');
   toast.textContent = msg;
   toast.className = 'toast show ' + (type === 'error' ? 'error' : '');
-  
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { toast.classList.remove('show'); }, 3000);
 }
