@@ -212,6 +212,10 @@
 <div id="adminSidebar">
   <h2 style="margin-top:0;">Панель управления</h2>
   
+  <div style="display:flex; gap:10px; margin-bottom: 5px;">
+    <button class="btn primary" style="width: 100%; background:#22c55e; padding: 12px; font-size: 14px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD, '_blank')">📥 Скачать таблицу (Excel)</button>
+  </div>
+
   <details class="sidebar-section" open>
     <summary>Статистика</summary>
     <div class="details-content">
@@ -438,7 +442,7 @@ let adminActionMode = 'block';
 let priceSettings = {};
 let activePaint = null;
 let paintStart = null;
-let currentForceCancelKey = null; // Для модалки админа
+let currentForceCancelKey = null;
 
 const parterreStrings = [
   "-000000000--000000000000000000000--000000000-", // 1
@@ -581,7 +585,7 @@ function createSeat(key, num, title, color, price, side, zoneName, rowNum) {
   
   if (bookedSet.has(key)) {
     if (bookedSet.has(key + '_blocked')) btn.classList.add('blocked');
-    else { btn.classList.add('booked'); btn.disabled = true; }
+    else { btn.classList.add('booked'); } // Убрано btn.disabled = true;
   }
   if (selected.has(key)) btn.classList.add('selected');
   return btn;
@@ -735,17 +739,25 @@ function updateBasePrice(val) {
 }
 
 function renderLegend() {
-  const legendDiv = document.getElementById('priceLegend'); legendDiv.innerHTML = ''; const colors = new Set();
-  if (priceSettings.rules) {
-    priceSettings.rules.forEach(r => {
-      if (!colors.has(r.color)) { 
-          colors.add(r.color); 
-          const p = priceSettings.colorPrices && priceSettings.colorPrices[r.color] ? priceSettings.colorPrices[r.color] : 600;
-          legendDiv.innerHTML += `<span><i class="dot" style="background:${r.color}"></i>${p}₽</span>`; 
+  const legendDiv = document.getElementById('priceLegend');
+  legendDiv.innerHTML = '';
+  
+  let items = [];
+  
+  if (priceSettings.colorPrices) {
+      for (let color in priceSettings.colorPrices) {
+          if (priceSettings.rules && priceSettings.rules.some(r => r.color === color)) {
+              items.push({ color: color, price: priceSettings.colorPrices[color] });
+          }
       }
-    });
   }
-  if (!colors.has('#2a3342')) { legendDiv.innerHTML += `<span><i class="dot" style="background:#2a3342"></i>${priceSettings.basePrice || 600}₽</span>`; }
+  
+  items.push({ color: '#2a3342', price: priceSettings.basePrice || 600 });
+  items.sort((a, b) => a.price - b.price);
+  
+  items.forEach(item => {
+      legendDiv.innerHTML += `<span><i class="dot" style="background:${item.color}"></i>${item.price}₽</span>`;
+  });
 }
 
 function updateBar(){ document.getElementById('count').textContent = selected.size; document.getElementById('bookBtn').disabled = selected.size === 0; }
@@ -843,7 +855,6 @@ document.body.addEventListener('mouseout', e => {
   if (e.target.closest('.seat')) { tooltip.style.display = 'none'; e.target.closest('.seat').classList.remove('painting'); }
 });
 
-// ОБРАБОТКА КЛИКОВ
 document.body.addEventListener('click', async e => {
   const btn = e.target.closest('.seat');
   if (!btn) return;
@@ -910,7 +921,6 @@ document.body.addEventListener('click', async e => {
 
   if (isAdminMode && adminActionMode === 'block') {
     if (btn.classList.contains('booked')) {
-      // ВМЕСТО АЛЕРТА ВЫЗЫВАЕМ НОВУЮ МОДАЛКУ
       openForceCancelModal(key);
       return;
     }
@@ -936,7 +946,6 @@ document.body.addEventListener('click', async e => {
   updateBar();
 });
 
-// ЛОГИКА ДЛЯ НОВОЙ МОДАЛКИ АДМИНА
 async function openForceCancelModal(seatKey) {
     currentForceCancelKey = seatKey;
     document.getElementById('forceCancelError').textContent = '';
