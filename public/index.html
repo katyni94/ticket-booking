@@ -81,15 +81,22 @@
   #adminBtn:hover { opacity: 1; }
   body.admin-mode #adminBtn { display: none; }
 
+  /* БОКОВАЯ ПАНЕЛЬ АДМИНА */
   #adminSidebar {
     position: fixed; right: -400px; top: 0; width: 380px; height: 100vh;
     background: #171d27; border-left: 1px solid #2a3446; padding: 20px;
     overflow-y: auto; z-index: 500; transition: right 0.3s; box-shadow: -5px 0 20px rgba(0,0,0,0.5);
-    display: flex; flex-direction: column; gap: 15px;
+    display: flex; flex-direction: column; gap: 10px;
   }
   body.admin-mode #adminSidebar { right: 0; }
   
-  .sidebar-section { background: #111721; padding: 12px; border-radius: 8px; border: 1px solid #2a3446; }
+  /* Аккордеон */
+  details.sidebar-section { background: #111721; border-radius: 8px; border: 1px solid #2a3446; padding: 5px 10px; }
+  details.sidebar-section summary { font-size: 13px; font-weight: bold; color: #fff; cursor: pointer; padding: 8px 0; outline: none; user-select: none; }
+  details.sidebar-section summary::marker { color: #3b82f6; }
+  details.sidebar-section[open] summary { border-bottom: 1px solid #2a3446; margin-bottom: 10px; }
+  details.sidebar-section .details-content { padding-bottom: 10px; }
+  
   .sidebar-section label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
   
   select.mode-select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #2a3446; background: #1f2937; color: #fff; font-weight: bold; font-size: 13px; outline: none; cursor: pointer; }
@@ -123,10 +130,12 @@
   #tooltip .t-zone { color: #666; font-size: 12px; margin-bottom: 4px; }
   #tooltip .t-price { font-weight: 600; color: #222; }
 
-  /* Стили для списка цен */
   .price-item-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; font-size: 12px; border-bottom: 1px solid #222; padding-bottom: 5px;}
   .price-item-row span { color: #ccc; flex: 1; }
   .price-item-row input { width: 70px !important; margin: 0 !important; padding: 4px !important; font-size: 12px !important;}
+
+  #saveAllBtn { background: #22c55e; color: white; width: 100%; padding: 12px; font-size: 15px; margin-top: 15px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
+  #saveAllBtn:hover { background: #16a34a; }
   
   @media (max-width: 768px) {
     body { padding: 10px 5px 120px; }
@@ -192,109 +201,112 @@
 <div class="legend" id="priceLegend" style="margin-top:-5px;"></div>
 
 <div id="paintPalette">
-  <div class="palette-item" onclick="selectPaint(600, '#FFC000')"><div class="palette-color" style="background:#FFC000"></div><div class="palette-price">600</div></div>
-  <div class="palette-item" onclick="selectPaint(800, '#FFFF00')"><div class="palette-color" style="background:#FFFF00"></div><div class="palette-price">800</div></div>
-  <div class="palette-item" onclick="selectPaint(1000, '#92D050')"><div class="palette-color" style="background:#92D050"></div><div class="palette-price">1000</div></div>
-  <div class="palette-item" onclick="selectPaint(1100, '#C55A11')"><div class="palette-color" style="background:#C55A11"></div><div class="palette-price">1100</div></div>
-  <div class="palette-item" onclick="selectPaint(1300, '#00B0F0')"><div class="palette-color" style="background:#00B0F0"></div><div class="palette-price">1300</div></div>
-  <div class="palette-item" onclick="selectPaint(1400, '#B4A7D6')"><div class="palette-color" style="background:#B4A7D6"></div><div class="palette-price">1400</div></div>
-  <div class="palette-item" onclick="selectPaint(1500, '#F4B183')"><div class="palette-color" style="background:#F4B183"></div><div class="palette-price">1500</div></div>
-  <div class="palette-item" onclick="selectPaint(0, '#2a3342')"><div class="palette-color" style="background:#2a3342"></div><div class="palette-price">Сброс</div></div>
+  <div class="palette-item" onclick="selectPaint('#FFC000')"><div class="palette-color" style="background:#FFC000"></div><div class="palette-price" id="p-price-FFC000">600</div></div>
+  <div class="palette-item" onclick="selectPaint('#FFFF00')"><div class="palette-color" style="background:#FFFF00"></div><div class="palette-price" id="p-price-FFFF00">800</div></div>
+  <div class="palette-item" onclick="selectPaint('#92D050')"><div class="palette-color" style="background:#92D050"></div><div class="palette-price" id="p-price-92D050">1000</div></div>
+  <div class="palette-item" onclick="selectPaint('#C55A11')"><div class="palette-color" style="background:#C55A11"></div><div class="palette-price" id="p-price-C55A11">1100</div></div>
+  <div class="palette-item" onclick="selectPaint('#00B0F0')"><div class="palette-color" style="background:#00B0F0"></div><div class="palette-price" id="p-price-00B0F0">1300</div></div>
+  <div class="palette-item" onclick="selectPaint('#B4A7D6')"><div class="palette-color" style="background:#B4A7D6"></div><div class="palette-price" id="p-price-B4A7D6">1400</div></div>
+  <div class="palette-item" onclick="selectPaint('#F4B183')"><div class="palette-color" style="background:#F4B183"></div><div class="palette-price" id="p-price-F4B183">1500</div></div>
+  <div class="palette-item" onclick="selectPaint('#2a3342')"><div class="palette-color" style="background:#2a3342"></div><div class="palette-price">Сброс</div></div>
 </div>
 
 <div id="adminSidebar">
   <h2 style="margin-top:0;">Панель управления</h2>
   
-  <div class="sidebar-section">
-    <label>Статистика (Левая)</label>
-    <div id="stats-left" style="font-size:12px; line-height:1.6;"></div>
-    <label style="margin-top:10px;">Статистика (Правая)</label>
-    <div id="stats-right" style="font-size:12px; line-height:1.6;"></div>
-  </div>
-
-  <div class="sidebar-section">
-    <label>Режим работы</label>
-    <select id="adminModeSelect" class="mode-select">
-      <option value="block">🛠 Блокировка (не продавать)</option>
-      <option value="book">🎟 Бронирование на клиента</option>
-      <option value="paint">🏷 Категории (цены)</option>
-    </select>
-  </div>
-
-  <div style="display:flex; gap:10px;">
-    <button class="btn ghost" style="flex:1; border:1px solid #555;" onclick="toggleSettingsPanel()">⚙ Настройки</button>
-    <button class="btn primary" style="flex:1; background: #22c55e;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD, '_blank')">📥 Excel</button>
-  </div>
-
-  <div class="sidebar-section" id="settings-panel" style="display:none;">
-    <label>Максимум билетов для клиентов</label>
-    <input type="number" id="set-max-seats" value="4">
-    <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-bottom:10px;">
-      <input type="checkbox" id="set-restrict-admin" style="width:20px; height:20px;">
-      Ограничивать для Админа
-    </label>
-    
-    <label>Фоновая картинка (URL)</label>
-    <input type="url" id="set-bg-url" placeholder="bg.jpg">
-    
-    <div style="display:flex; gap:5px; margin-bottom:10px;">
-      <button class="btn ghost" style="flex:1; padding:5px; font-size:11px;" onclick="setBgPreset('cover')">Заполнить</button>
-      <button class="btn ghost" style="flex:1; padding:5px; font-size:11px;" onclick="setBgPreset('100% auto')">По ширине</button>
+  <details class="sidebar-section" open>
+    <summary>Статистика</summary>
+    <div class="details-content">
+      <label>Левая часть</label>
+      <div id="stats-left" style="font-size:12px; line-height:1.6; margin-bottom:10px;"></div>
+      <label>Правая часть</label>
+      <div id="stats-right" style="font-size:12px; line-height:1.6;"></div>
     </div>
-    
-    <label>Размер (если не выбрано выше)</label>
-    <input type="range" id="bg-size-slider" min="10" max="200" value="100" oninput="updateBgPreview()">
-    <label>Сдвиг X</label>
-    <input type="range" id="bg-x-slider" min="0" max="100" value="50" oninput="updateBgPreview()">
-    <label>Сдвиг Y</label>
-    <input type="range" id="bg-y-slider" min="0" max="100" value="50" oninput="updateBgPreview()">
-    
-    <div style="display:flex; gap:5px; margin-top:10px;">
-      <button class="btn ghost" style="flex:1; padding:8px;" onclick="previewBg()">Предпросмотр</button>
-      <button class="btn primary" style="flex:1; padding:8px; background:#22c55e;" onclick="saveSettings()">Сохранить</button>
-    </div>
-  </div>
+  </details>
 
-  <!-- БЛОК РЕДАКТИРОВАНИЯ ЦЕН -->
-  <div class="sidebar-section">
-    <label style="font-size: 14px; color: #fff; margin-bottom: 10px;">Редактор цен</label>
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-       <span style="font-size:12px;">Базовая цена:</span>
-       <input type="number" id="base-price-input" style="width:70px; margin:0; padding:4px;" onchange="updateBasePrice(this.value)">
+  <details class="sidebar-section" open>
+    <summary>Режим работы</summary>
+    <div class="details-content">
+      <select id="adminModeSelect" class="mode-select">
+        <option value="block">🛠 Блокировка (не продавать)</option>
+        <option value="book">🎟 Бронирование на клиента</option>
+        <option value="paint">🏷 Категории (цены)</option>
+      </select>
     </div>
-    <label style="font-size: 11px; margin-bottom: 5px;">Настройки по местам (Цвет → Цена):</label>
-    <div id="price-rules-list" style="max-height: 200px; overflow-y: auto; padding-right:5px;"></div>
-  </div>
+  </details>
 
-  <div class="sidebar-section">
-      <label>Скрыть половину от клиентов</label>
+  <details class="sidebar-section" open>
+    <summary>Редактор цен</summary>
+    <div class="details-content">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+         <span style="font-size:12px;">Базовая цена:</span>
+         <input type="number" id="base-price-input" style="width:70px; margin:0; padding:4px;" onchange="updateBasePrice(this.value)">
+      </div>
+      <label style="font-size: 11px; margin-bottom: 5px;">Справочник цен по цветам:</label>
+      <div id="color-prices-list"></div>
+    </div>
+  </details>
+
+  <details class="sidebar-section">
+    <summary>Настройки зала (Фон, лимиты)</summary>
+    <div class="details-content">
+      <label>Максимум билетов для клиентов</label>
+      <input type="number" id="set-max-seats" value="4">
+      <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-bottom:10px;">
+        <input type="checkbox" id="set-restrict-admin" style="width:20px; height:20px;">
+        Ограничивать для Админа
+      </label>
+      
+      <label>Фоновая картинка (URL)</label>
+      <input type="url" id="set-bg-url" placeholder="bg.jpg">
+      
+      <div style="display:flex; gap:5px; margin-bottom:10px;">
+        <button class="btn ghost" style="flex:1; padding:5px; font-size:11px;" onclick="setBgPreset('cover')">Заполнить</button>
+        <button class="btn ghost" style="flex:1; padding:5px; font-size:11px;" onclick="setBgPreset('100% auto')">По ширине</button>
+      </div>
+      
+      <label>Размер (если не выбрано выше)</label>
+      <input type="range" id="bg-size-slider" min="10" max="200" value="100" oninput="updateBgPreview()">
+      <label>Сдвиг X</label>
+      <input type="range" id="bg-x-slider" min="0" max="100" value="50" oninput="updateBgPreview()">
+      <label>Сдвиг Y</label>
+      <input type="range" id="bg-y-slider" min="0" max="100" value="50" oninput="updateBgPreview()">
+      
+      <button class="btn ghost" style="width:100%; padding:8px; margin-top:5px;" onclick="previewBg()">Предпросмотр</button>
+    </div>
+  </details>
+
+  <details class="sidebar-section">
+    <summary>Скрытие половин</summary>
+    <div class="details-content">
       <div style="display: flex; gap: 10px;">
           <button class="btn" id="hideLeftBtn" style="flex: 1; background:#242d3b; color:#fff; border: 1px solid #f87171;" onclick="toggleHide('left')">Скрыть левую</button>
           <button class="btn" id="hideRightBtn" style="flex: 1; background:#242d3b; color:#fff; border: 1px solid #f87171;" onclick="toggleHide('right')">Скрыть правую</button>
       </div>
-  </div>
-
-  <div class="sidebar-section">
-    <label>Группы (Левая)</label>
-    <div id="groups-left-list" style="margin-bottom:5px;"></div>
-    <div style="display:flex; gap:5px;">
-      <input type="text" id="new-group-left" placeholder="Название" style="flex:1; margin:0;">
-      <button class="btn primary" style="padding:8px 12px;" onclick="addGroup('left')">+</button>
     </div>
-  </div>
+  </details>
 
-  <div class="sidebar-section">
-    <label>Группы (Правая)</label>
-    <div id="groups-right-list" style="margin-bottom:5px;"></div>
-    <div style="display:flex; gap:5px;">
-      <input type="text" id="new-group-right" placeholder="Название" style="flex:1; margin:0;">
-      <button class="btn primary" style="padding:8px 12px;" onclick="addGroup('right')">+</button>
+  <details class="sidebar-section">
+    <summary>Группы</summary>
+    <div class="details-content">
+      <label>Левая часть</label>
+      <div id="groups-left-list" style="margin-bottom:5px;"></div>
+      <div style="display:flex; gap:5px; margin-bottom:10px;">
+        <input type="text" id="new-group-left" placeholder="Название" style="flex:1; margin:0;">
+        <button class="btn primary" style="padding:8px 12px;" onclick="addGroup('left')">+</button>
+      </div>
+
+      <label>Правая часть</label>
+      <div id="groups-right-list" style="margin-bottom:5px;"></div>
+      <div style="display:flex; gap:5px;">
+        <input type="text" id="new-group-right" placeholder="Название" style="flex:1; margin:0;">
+        <button class="btn primary" style="padding:8px 12px;" onclick="addGroup('right')">+</button>
+      </div>
     </div>
-  </div>
+  </details>
 
-  <div style="margin-top: auto; border-top: 1px solid #333; padding-top: 15px; display: flex; gap: 10px;">
-    <button class="btn" style="flex: 1; background:#7c3aed; color:white;" onclick="logoutAdmin()">Выйти из Админа</button>
-  </div>
+  <button id="saveAllBtn" onclick="saveSettings()">💾 Сохранить все настройки</button>
+  <button class="btn" style="margin-top:10px; background:#7c3aed; color:white; padding:10px;" onclick="logoutAdmin()">Выйти из Админа</button>
 </div>
 
 <button class="btn ghost" id="adminBtn" title="Вход для администратора">⚙</button>
@@ -416,7 +428,6 @@ let priceSettings = {};
 let activePaint = null;
 let paintStart = null;
 
-// ТОЧНЫЕ СХЕМЫ МЕСТ (Исправленные и выровненные)
 const parterreStrings = [
   "-000000000--000000000000000000000--000000000-", // 1
   "--00000000--000000000000000000000--00000000--", // 2
@@ -447,45 +458,36 @@ const parterreStrings = [
 const parterreMaxSeats = [39, 37, 37, 35, 20, 35, 31, 33, 32, 30, 30, 29, 29, 29, 29, 28, 28, 27, 19, 19, 19, 30, 20, 17, 19];
 
 const centralStrings = [
-  "--------000000000000000000000000000-------------", // 1 (27 мест)
-  "-------0000000000000000000000000000-------------", // 2 (28 мест)
-  "------000000000000000000000000000000------------", // 3 (30 мест)
-  "------0000000000000000000000000000000------------", // 4 (31 мест)
-  "------00000000000000----00000000000000----------"  // 5 (28 мест)
+  "--------000000000000000000000000000-------------", // 1
+  "-------0000000000000000000000000000-------------", // 2
+  "------000000000000000000000000000000------------", // 3
+  "------0000000000000000000000000000000------------", // 4
+  "------00000000000000----00000000000000----------"  // 5
 ];
 const centralMaxSeats = [27, 28, 30, 31, 28];
 
 const tanci_parterre = { 1: [19, 39], 2: [18, 37], 3: [18, 37], 4: [17, 35], 5: [10, 20], 6: [17, 35], 7: [15, 31], 8: [16, 33], 9: [15, 32], 10: [14, 30], 11: [14, 30], 12: [14, 29], 13: [14, 29], 14: [14, 29], 15: [14, 29], 16: [14, 28], 17: [14, 28], 18: [13, 27], 19: [11, 19], 20: [11, 19], 21: [11, 19], 22: [15, 30], 23: [10, 20], 24: [9, 17], 25: [10, 19] };
 const tanci_central = { 1: [14, 27], 2: [14, 28], 3: [15, 30], 4: [16, 31], 5: [15, 28] };
 
-// Левый балкон А (всего 18 мест в высоту)
-// Считается справа налево: 1-я колонка (справа) - 1 ряд, 4-я (слева) - 4 ряд.
 const leftBalcAConf = [
-    { rowNum: 4, present: (r) => r >= 2 }, // Левая колонка (4 ряд): 16 мест (не хватает 2 сверху)
-    { rowNum: 3, present: (r) => r >= 1 }, // 3 ряд: 17 мест (не хватает 1 сверху)
-    { rowNum: 2, present: (r) => r >= 1 }, // 2 ряд: 17 мест (не хватает 1 сверху)
-    { rowNum: 1, present: () => true }     // Правая колонка (1 ряд): 18 мест (есть все)
+    { rowNum: 4, present: (r) => r >= 2 },
+    { rowNum: 3, present: (r) => r >= 1 },
+    { rowNum: 2, present: (r) => r >= 1 },
+    { rowNum: 1, present: () => true }
 ];
-
-// Правый балкон А (всего 18 мест в высоту)
-// Считается слева направо: 1-я колонка (слева) - 1 ряд, 4-я (справа) - 4 ряд.
 const rightBalcAConf = [
-    { rowNum: 1, present: () => true }, // Левая колонка (1 ряд): 18 мест (есть все)
-    { rowNum: 2, present: (r) => r >= 1 }, // 2 ряд: 17 мест (не хватает 1 сверху)
-    { rowNum: 3, present: () => true },    // 3 ряд: 18 мест (есть все)
-    { rowNum: 4, present: (r) => r >= 1 }  // Правая колонка (4 ряд): 17 мест (не хватает 1 сверху)
+    { rowNum: 1, present: (r) => r >= 1 },
+    { rowNum: 2, present: (r) => r >= 1 },
+    { rowNum: 3, present: () => true },
+    { rowNum: 4, present: (r) => r >= 1 }
 ];
-
-// Левый балкон Б (всего 17 мест в высоту)
 const leftBalcBConf = [
-    { rowNum: 2, present: (r) => r >= 1 }, // Левая колонка (2 ряд): 16 мест (не хватает 1 сверху)
-    { rowNum: 1, present: () => true }     // Правая колонка (1 ряд): 17 мест (есть все)
+    { rowNum: 2, present: (r) => r >= 1 },
+    { rowNum: 1, present: () => true }
 ];
-
-// Правый балкон Б (всего 17 мест в высоту)
 const rightBalcBConf = [
-    { rowNum: 1, present: () => true },    // Левая колонка (1 ряд): 17 мест (есть все)
-    { rowNum: 2, present: (r) => r >= 1 }  // Правая колонка (2 ряд): 16 мест (не хватает 1 сверху)
+    { rowNum: 1, present: () => true },
+    { rowNum: 2, present: (r) => r >= 1 }
 ];
 
 const urlParams = new URLSearchParams(window.location.search);
@@ -547,7 +549,9 @@ function getPriceAndColor(zone, side, row, seatNum) {
     for (let i = priceSettings.rules.length - 1; i >= 0; i--) {
       let r = priceSettings.rules[i];
       if (r.zone === zone && row == r.row && seatNum >= r.start && seatNum <= r.end) {
-        return { price: r.price, color: r.color };
+        // Цена берется из справочника цветов
+        const price = priceSettings.colorPrices && priceSettings.colorPrices[r.color] !== undefined ? priceSettings.colorPrices[r.color] : (priceSettings.basePrice || 600);
+        return { price: price, color: r.color };
       }
     }
   }
@@ -647,7 +651,7 @@ function render() {
       btnR.style.display = (priceSettings.hidden && priceSettings.hidden.right) ? 'none' : 'inline-block';
   }
   
-  updateBar(); renderLegend(); updateHideButtons(); updateStats(); renderPriceRulesList();
+  updateBar(); renderLegend(); updateHideButtons(); updateStats(); renderColorPricesList();
 }
 
 function updateStats() {
@@ -671,60 +675,67 @@ function updateStats() {
         Всего: <b>${R_total}</b><br>Свободно: <span style="color:#f59e0b">${R_free}</span><br>Забронировано: <span style="color:#f87171">${R_booked}</span><br>Заблокировано: <span style="color:#ccc">${R_blocked}</span>`;
 }
 
-function renderPriceRulesList() {
-    const list = document.getElementById('price-rules-list');
+function renderColorPricesList() {
+    const list = document.getElementById('color-prices-list');
     list.innerHTML = '';
     
     document.getElementById('base-price-input').value = priceSettings.basePrice || 600;
     
-    if (!priceSettings.rules || priceSettings.rules.length === 0) {
-        list.innerHTML = '<div style="font-size:11px; color:#888;">Нет заданных категорий.</div>';
-        return;
-    }
+    const colors = [
+        { hex: '#FFC000', name: 'Желтый' },
+        { hex: '#FFFF00', name: 'Салатовый' },
+        { hex: '#92D050', name: 'Зеленый' },
+        { hex: '#C55A11', name: 'Оранжевый' },
+        { hex: '#00B0F0', name: 'Голубой' },
+        { hex: '#B4A7D6', name: 'Фиолетовый' },
+        { hex: '#F4B183', name: 'Розовый' }
+    ];
     
-    const grouped = {};
-    priceSettings.rules.forEach((r, index) => {
-        let zoneName = 'Партер';
-        if (r.zone === 'central') zoneName = 'ЦБ';
-        else if (r.zone.includes('balc')) zoneName = r.zone.includes('left') ? 'Лев.бал.' : 'Прав.бал.';
-        
-        const key = `${zoneName} Р${r.row} (м.${r.start}-${r.end})`;
-        if (!grouped[key]) grouped[key] = { color: r.color, indices: [] };
-        grouped[key].indices.push(index);
-    });
+    if (!priceSettings.colorPrices) {
+        priceSettings.colorPrices = { '#FFC000': 600, '#FFFF00': 800, '#92D050': 1000, '#C55A11': 1100, '#00B0F0': 1300, '#B4A7D6': 1400, '#F4B183': 1500 };
+    }
 
-    for (let key in grouped) {
-        const group = grouped[key];
-        const originalIndex = group.indices[0];
-        const currentPrice = priceSettings.rules[originalIndex].price;
-        
+    colors.forEach(c => {
+        const currentPrice = priceSettings.colorPrices[c.hex] || 600;
         const div = document.createElement('div');
         div.className = 'price-item-row';
         div.innerHTML = `
-            <span><i class="dot" style="background:${group.color}; margin-right:5px;"></i> ${key}</span>
-            <input type="number" value="${currentPrice}" onchange="updateRulePrice(${originalIndex}, this.value)">
+            <span><i class="dot" style="background:${c.hex}; margin-right:5px;"></i> ${c.name}</span>
+            <input type="number" value="${currentPrice}" onchange="updateColorPrice('${c.hex}', this.value)">
         `;
         list.appendChild(div);
-    }
+        
+        // Обновляем подписи на палитре внизу
+        const pPriceEl = document.getElementById('p-price-' + c.hex.replace('#', ''));
+        if (pPriceEl) pPriceEl.textContent = currentPrice;
+    });
 }
 
-function updateRulePrice(index, newPrice) {
-    priceSettings.rules[index].price = Number(newPrice);
+function updateColorPrice(colorHex, newPrice) {
+    if (!priceSettings.colorPrices) priceSettings.colorPrices = {};
+    priceSettings.colorPrices[colorHex] = Number(newPrice);
+    
+    // Обновляем подписи на палитре
+    const pPriceEl = document.getElementById('p-price-' + colorHex.replace('#', ''));
+    if (pPriceEl) pPriceEl.textContent = newPrice;
+    
     render();
-    autoSaveSettings();
 }
 
 function updateBasePrice(val) {
     priceSettings.basePrice = Number(val);
     render();
-    autoSaveSettings();
 }
 
 function renderLegend() {
   const legendDiv = document.getElementById('priceLegend'); legendDiv.innerHTML = ''; const colors = new Set();
   if (priceSettings.rules) {
     priceSettings.rules.forEach(r => {
-      if (!colors.has(r.color)) { colors.add(r.color); legendDiv.innerHTML += `<span><i class="dot" style="background:${r.color}"></i>${r.price}₽</span>`; }
+      if (!colors.has(r.color)) { 
+          colors.add(r.color); 
+          const p = priceSettings.colorPrices && priceSettings.colorPrices[r.color] ? priceSettings.colorPrices[r.color] : 600;
+          legendDiv.innerHTML += `<span><i class="dot" style="background:${r.color}"></i>${p}₽</span>`; 
+      }
     });
   }
   if (!colors.has('#2a3342')) { legendDiv.innerHTML += `<span><i class="dot" style="background:#2a3342"></i>${priceSettings.basePrice || 600}₽</span>`; }
@@ -765,10 +776,11 @@ async function loadSettings() {
     const res = await fetch('/api/settings');
     priceSettings = await res.json();
     if (!priceSettings || Object.keys(priceSettings).length === 0) {
-      priceSettings = { basePrice: 600, rules: [], hidden: { left: false, right: false }, maxSeats: 4, bgUrl: '', bgSize: 'cover', bgPosX: 50, bgPosY: 50, restrictAdminSeats: true, groups: { left: [], right: [] } };
+      priceSettings = { basePrice: 600, colorPrices: { '#FFC000': 600, '#FFFF00': 800, '#92D050': 1000, '#C55A11': 1100, '#00B0F0': 1300, '#B4A7D6': 1400, '#F4B183': 1500 }, rules: [], hidden: { left: false, right: false }, maxSeats: 4, bgUrl: '', bgSize: 'cover', bgPosX: 50, bgPosY: 50, restrictAdminSeats: true, groups: { left: [], right: [] } };
     }
     if (!priceSettings.groups) priceSettings.groups = { left: [], right: [] };
     if (!priceSettings.hidden) priceSettings.hidden = { left: false, right: false };
+    if (!priceSettings.colorPrices) priceSettings.colorPrices = { '#FFC000': 600, '#FFFF00': 800, '#92D050': 1000, '#C55A11': 1100, '#00B0F0': 1300, '#B4A7D6': 1400, '#F4B183': 1500 };
     
     CURRENT_MAX_SEATS = priceSettings.maxSeats || 4;
     
@@ -844,7 +856,7 @@ document.body.addEventListener('click', async e => {
   
   if (isAdminMode && adminActionMode === 'paint') {
     if (btn.classList.contains('booked')) return alert('Это место куплено, его нельзя перекрасить.');
-    if (!activePaint) return alert('Сначала выберите цену в палитре снизу!');
+    if (!activePaint) return alert('Сначала выберите цвет в палитре снизу!');
     if (!priceSettings.rules) priceSettings.rules = [];
     
     if (!paintStart) {
@@ -853,8 +865,8 @@ document.body.addEventListener('click', async e => {
         
         paintStart.applySingle = () => {
             priceSettings.rules = priceSettings.rules.filter(r => !(r.zone === zone && r.row === row && r.start === seat && r.end === seat));
-            if (activePaint.price !== 0) priceSettings.rules.push({ zone, row, start: seat, end: seat, price: activePaint.price, color: activePaint.color });
-            render(); autoSaveSettings();
+            if (activePaint !== '#2a3342') priceSettings.rules.push({ zone, row, start: seat, end: seat, color: activePaint });
+            render(); 
         };
         showToast('Выбрано 1 место. Кликните по другому для диапазона.');
     } else {
@@ -875,13 +887,12 @@ document.body.addEventListener('click', async e => {
         priceSettings.rules = priceSettings.rules.filter(r => !(r.zone === zone && r.row >= minRow && r.row <= maxRow && r.start <= maxSeat && r.end >= minSeat));
         
         for (let r = minRow; r <= maxRow; r++) {
-            if (activePaint.price !== 0) priceSettings.rules.push({ zone, row: r, start: minSeat, end: maxSeat, price: activePaint.price, color: activePaint.color });
+            if (activePaint !== '#2a3342') priceSettings.rules.push({ zone, row: r, start: minSeat, end: maxSeat, color: activePaint });
         }
         
         paintStart = null;
         document.querySelectorAll('.painting').forEach(el => el.classList.remove('painting'));
         render();
-        autoSaveSettings();
         showToast('Диапазон применен!');
     }
     return;
@@ -940,13 +951,6 @@ async function toggleHide(side) {
   }
   
   updateHideButtons(); render();
-  
-  try { await fetch(`/api/admin/settings?pass=${ADMIN_PASSWORD}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(priceSettings) }); } catch(e) { alert('Ошибка сохранения'); }
-}
-
-function toggleSettingsPanel() {
-  const panel = document.getElementById('settings-panel');
-  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 }
 
 function addGroup(side) {
@@ -959,7 +963,6 @@ function addGroup(side) {
     priceSettings.groups[side].push(val);
     input.value = '';
     renderGroups();
-    autoSaveSettings();
   }
 }
 
@@ -976,7 +979,6 @@ function renderGroups() {
         if (confirm(`Удалить группу "${g}"?`)) {
           priceSettings.groups[side] = priceSettings.groups[side].filter(x => x !== g);
           renderGroups();
-          autoSaveSettings();
         }
       };
       list.appendChild(tag);
@@ -997,29 +999,17 @@ adminModeSelect.addEventListener('change', (e) => {
     } else if (adminActionMode === 'paint') {
         adminModeSelect.classList.add('mode-paint');
         document.getElementById('paintPalette').style.display = 'flex';
-        showToast('Выберите цену и кликните по двум местам');
+        showToast('Выберите цвет и кликните по двум местам');
     } else {
         document.getElementById('paintPalette').style.display = 'none';
         showToast('Режим: Блокировка');
     }
 });
 
-function selectPaint(price, color) {
-    activePaint = { price, color };
+function selectPaint(color) {
+    activePaint = color;
     document.querySelectorAll('.palette-item').forEach(el => el.classList.remove('active'));
     event.currentTarget.classList.add('active');
-}
-
-let autoSaveTimer;
-function autoSaveSettings() {
-  clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(async () => {
-    try {
-      await fetch(`/api/admin/settings?pass=${ADMIN_PASSWORD}`, {
-        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(priceSettings)
-      });
-    } catch(e) {}
-  }, 500);
 }
 
 document.getElementById('adminBtn').addEventListener('click', () => {
