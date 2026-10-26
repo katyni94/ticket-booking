@@ -215,7 +215,6 @@ app.post('/api/admin/toggle-block', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
 });
 
-// НОВЫЙ ЭНДПОИНТ: Получить данные о брони для админа
 app.get('/api/admin/booking-info', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
   try {
@@ -225,7 +224,6 @@ app.get('/api/admin/booking-info', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
-// НОВЫЙ ЭНДПОИНТ: Принудительно снять бронь
 app.post('/api/admin/force-cancel', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
   try {
@@ -234,6 +232,7 @@ app.post('/api/admin/force-cancel', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
+// ЭКСПОРТ В EXCEL
 app.get('/api/admin/export', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   try {
@@ -252,7 +251,6 @@ app.get('/api/admin/export', async (req, res) => {
         for (let i = appSettings.rules.length - 1; i >= 0; i--) {
           let r = appSettings.rules[i];
           if (r.zone === zone && row == r.row && seat >= r.start && seat <= r.end) {
-            // Используем новый справочник цветов
             if (r.color && appSettings.colorPrices && appSettings.colorPrices[r.color] !== undefined) {
                 return appSettings.colorPrices[r.color];
             }
@@ -307,6 +305,84 @@ app.get('/api/admin/export', async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="tickets.xlsx"');
     await workbook.xlsx.write(res);
     res.end();
+  } catch (err) { res.status(500).send('Ошибка экспорта: ' + err.message); }
+});
+
+// ЭКСПОРТ В WORD (HTML-формат)
+app.get('/api/admin/export-word', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
+  try {
+    const { rows: booked } = await pool.query("SELECT * FROM bookings WHERE status = 'booked' ORDER BY created_at ASC");
+
+    const getPrice = (key) => {
+      let zone = ''; let row = 0, seat = 0;
+      if (key.startsWith('parterre-')) { zone = 'parterre'; const parts = key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
+      else if (key.startsWith('central-')) { zone = 'central'; const parts = key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
+      else if (key.startsWith('balc-')) { const parts = key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
+      
+      if (appSettings.rules) {
+        for (let i = appSettings.rules.length - 1; i >= 0; i--) {
+          let r = appSettings.rules[i];
+          if (r.zone === zone && row == r.row && seat >= r.start && seat <= r.end) {
+            if (r.color && appSettings.colorPrices && appSettings.colorPrices[r.color] !== undefined) {
+                return appSettings.colorPrices[r.color];
+            }
+            return r.price || appSettings.basePrice || 600;
+          }
+        }
+      }
+      return appSettings.basePrice || 600;
+    };
+
+    let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="utf-8"><title>Билеты</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 12pt; }
+      table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+      th, td { border: 1px solid #000; padding: 5px; text-align: left; }
+      th { background-color: #f0f0f0; font-weight: bold; }
+      h1 { font-size: 16pt; }
+    </style>
+    </head><body>`;
+
+    html += `<h1>Список проданных билетов</h1>`;
+    html += `<table><tr><th>Зона</th><th>Ряд</th><th>Место</th><th>Фамилия</th><th>Имя</th><th>Телефон</th><th>Резерв</th><th>Группа</th><th>Сумма</th></tr>`;
+
+    const summaryMap = {};
+
+    booked.forEach(b => {
+      let zoneName = 'Балкон'; let row = 0, seat = 0;
+      if (b.seat_key.startsWith('parterre-')) { zoneName = 'Партер'; const parts = b.seat_key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
+      else if (b.seat_key.startsWith('central-')) { zoneName = 'Центр. балкон'; const parts = b.seat_key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
+      else if (b.seat_key.startsWith('balc-left-a-')) { zoneName = 'Левый балкон А'; const parts = b.seat_key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
+      else if (b.seat_key.startsWith('balc-left-b-')) { zoneName = 'Левый балкон Б'; const parts = b.seat_key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
+      else if (b.seat_key.startsWith('balc-right-a-')) { zoneName = 'Правый балкон А'; const parts = b.seat_key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
+      else if (b.seat_key.startsWith('balc-right-b-')) { zoneName = 'Правый балкон Б'; const parts = b.seat_key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
+
+      const price = getPrice(b.seat_key);
+      const reserveStr = (b.reserve_lastname && b.reserve_firstname) ? `${b.reserve_lastname} ${b.reserve_firstname}` : '';
+
+      html += `<tr><td>${zoneName}</td><td>${row}</td><td>${seat}</td><td>${b.lastname}</td><td>${b.firstname}</td><td>${b.phone}</td><td>${reserveStr}</td><td>${b.group_name || ''}</td><td>${price} ₽</td></tr>`;
+
+      const personKey = `${b.lastname}_${b.firstname}_${b.phone}`;
+      if (!summaryMap[personKey]) {
+          summaryMap[personKey] = { lastname: b.lastname, firstname: b.firstname, phone: b.phone, group: b.group_name || '', count: 0, total: 0 };
+      }
+      summaryMap[personKey].count++;
+      summaryMap[personKey].total += price;
+    });
+    html += `</table>`;
+
+    html += `<h1>Сводка по покупателям</h1>`;
+    html += `<table><tr><th>Фамилия</th><th>Имя</th><th>Телефон</th><th>Группа</th><th>Кол-во мест</th><th>Итого сумма</th></tr>`;
+    Object.values(summaryMap).forEach(p => {
+      html += `<tr><td>${p.lastname}</td><td>${p.firstname}</td><td>${p.phone}</td><td>${p.group}</td><td>${p.count}</td><td>${p.total} ₽</td></tr>`;
+    });
+    html += `</table></body></html>`;
+
+    res.setHeader('Content-Type', 'application/msword');
+    res.setHeader('Content-Disposition', 'attachment; filename="tickets.doc"');
+    res.send(html);
   } catch (err) { res.status(500).send('Ошибка экспорта: ' + err.message); }
 });
 
