@@ -232,6 +232,19 @@ app.post('/api/admin/force-cancel', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
+// НОВЫЙ ЭНДПОИНТ: РЕДАКТИРОВАНИЕ БРОНИ
+app.post('/api/admin/edit-booking', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
+  const { seat, firstname, lastname, phone, group_name, reserve_firstname, reserve_lastname } = req.body;
+  try {
+    await pool.query(
+      "UPDATE bookings SET firstname=$1, lastname=$2, phone=$3, group_name=$4, reserve_firstname=$5, reserve_lastname=$6 WHERE seat_key=$7",
+      [firstname, lastname, phone, group_name, reserve_firstname, reserve_lastname, seat]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
+});
+
 // ЭКСПОРТ В EXCEL
 app.get('/api/admin/export', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
