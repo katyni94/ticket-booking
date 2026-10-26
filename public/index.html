@@ -34,7 +34,6 @@
   .stage{ width:min(400px,80%); height:40px; border-radius:0 0 50% 50%; background:#2a3446; display:flex; align-items:center; justify-content:center; color:#8b97a8; font-weight:600; letter-spacing:2px; text-transform:uppercase; margin-bottom:30px; border-top:4px solid #1f2735; }
   .zone-title{font-size:11px; color:var(--muted); text-transform:uppercase; margin:15px 0 5px; font-weight:600; text-align:center}
   
-  /* Исправлен скролл для мобилок */
   .hall-wrap{
     width:100%; max-width:100%; overflow-x:auto; padding-bottom:20px; display:flex; justify-content:center;
     -webkit-overflow-scrolling: touch;
@@ -88,7 +87,6 @@
   #adminBtn:hover { opacity: 1; }
   body.admin-mode #adminBtn { display: none; }
 
-  /* БОКОВАЯ ПАНЕЛЬ АДМИНА */
   #adminSidebar {
     position: fixed; right: -400px; top: 0; width: 380px; height: 100vh;
     background: #171d27; border-left: 1px solid #2a3446; padding: 20px;
@@ -138,23 +136,19 @@
   #saveAllBtn { background: #22c55e; color: white; width: 100%; padding: 12px; font-size: 15px; margin-top: 15px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
   #saveAllBtn:hover { background: #16a34a; }
   
-  /* Мобильная адаптация */
   @media (max-width: 768px) {
-    body { padding: 10px 5px 140px; }
+    /* Увеличили отступ снизу, чтобы бар не перекрывал контент */
+    body { padding: 10px 5px 220px; } 
     body.admin-mode { padding-right: 0; }
     body.admin-mode .bar { padding-right: 0; }
-    
-    /* Панель админа на телефоне */
     #adminSidebar { width: 100%; right: -100%; }
     body.admin-mode #adminSidebar { right: 0; }
-    body.admin-mode .hall-wrap { display: none; } /* Прячем зал, когда открыта админка на телефоне */
+    body.admin-mode .hall-wrap { display: none; }
     body.admin-mode h1, body.admin-mode .sub, body.admin-mode .event-switch, body.admin-mode .stage, body.admin-mode .legend { display: none; }
-    
     .seat { width: 16px; height: 16px; font-size: 8px; border-radius: 3px 3px 1px 1px; }
     .row { gap: 3px; margin-bottom: 3px; }
     .dj-booth, .wall-block { height: 16px; font-size: 8px; }
     .aisle { height: 16px; }
-    
     .event-switch { flex-direction: column; width: 100%; max-width: 300px; }
     .bar { padding: 10px; gap: 10px; flex-direction: column; }
     .btn { padding: 8px 12px; font-size: 12px; }
@@ -221,7 +215,6 @@
 <div id="adminSidebar">
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
     <h2 style="margin:0;">Панель управления</h2>
-    <!-- Кнопка для мобильных, чтобы вернуться к залу -->
     <button class="btn primary" style="display:none; padding: 5px 10px;" id="closeSidebarBtn" onclick="toggleMobileAdmin()">✕ Закрыть</button>
   </div>
   
@@ -321,8 +314,6 @@
   </details>
 
   <button id="saveAllBtn" onclick="saveSettings()">💾 Сохранить все настройки</button>
-  
-  <!-- Кнопка выхода для мобилок и ПК -->
   <button class="btn" style="margin-top:10px; background:#7c3aed; color:white; padding:10px;" onclick="logoutAdmin()">Выйти из Админа</button>
 </div>
 
@@ -591,6 +582,7 @@ function createSeat(key, num, title, color, price, side, zoneName, rowNum) {
   btn.type = 'button'; btn.className = 'seat'; btn.dataset.key = key; btn.dataset.side = side; btn.dataset.zone = zoneName;
   btn.dataset.row = rowNum; btn.dataset.seat = num; btn.dataset.price = price; btn.textContent = num;
   btn.style.background = color;
+  btn.dataset.color = color; // ВАЖНО: сохраняем цвет в data-атрибут для легенды
   
   if (side !== currentEvent) btn.classList.add('disabled');
   if (priceSettings.hidden && priceSettings.hidden[side]) btn.classList.add('hidden-side');
@@ -754,22 +746,34 @@ function updateBasePrice(val) {
 function renderLegend() {
   const legendDiv = document.getElementById('priceLegend');
   legendDiv.innerHTML = '';
-  let items = [];
-  if (priceSettings.colorPrices) {
-      for (let color in priceSettings.colorPrices) {
-          if (priceSettings.rules && priceSettings.rules.some(r => r.color === color)) {
-              items.push({ color: color, price: priceSettings.colorPrices[color] });
-          }
+  
+  let usedColors = new Set();
+  
+  document.querySelectorAll('.seat').forEach(seat => {
+      if (seat.dataset.color) {
+          usedColors.add(seat.dataset.color);
       }
-  }
-  items.push({ color: '#2a3342', price: priceSettings.basePrice || 600 });
+  });
+  
+  let items = [];
+  
+  usedColors.forEach(color => {
+      let price = 600;
+      if (color === '#2a3342') {
+          price = priceSettings.basePrice || 600;
+      } else {
+          price = priceSettings.colorPrices && priceSettings.colorPrices[color] !== undefined ? priceSettings.colorPrices[color] : (priceSettings.basePrice || 600);
+      }
+      items.push({ color: color, price: price });
+  });
+  
   items.sort((a, b) => a.price - b.price);
+  
   items.forEach(item => {
       legendDiv.innerHTML += `<span><i class="dot" style="background:${item.color}"></i>${item.price}₽</span>`;
   });
 }
 
-// ОБНОВЛЕННАЯ ПАНЕЛЬ С ИНФО О ВЫБРАННЫХ МЕСТАХ
 function updateBar(){ 
   document.getElementById('count').textContent = selected.size; 
   document.getElementById('bookBtn').disabled = selected.size === 0;
@@ -1105,7 +1109,11 @@ function selectPaint(color) {
 
 document.getElementById('adminBtn').addEventListener('click', () => {
   if (isAdminMode) {
-    showToast('Вы уже в админ-панели');
+    // ИСПРАВЛЕНИЕ: Если панель закрыта, снова ее открываем
+    document.body.classList.add('admin-mode');
+    if (window.innerWidth <= 768) {
+        document.getElementById('closeSidebarBtn').style.display = 'block';
+    }
   } else {
     document.getElementById('loginModal').hidden = false;
     document.getElementById('adminPassInput').value = '';
@@ -1136,7 +1144,6 @@ function loginAdminUI() {
     document.body.classList.add('admin-mode');
     document.getElementById('adminBtn').style.display = 'none';
     
-    // Показываем кнопку закрытия панели на мобильных
     if (window.innerWidth <= 768) {
         document.getElementById('closeSidebarBtn').style.display = 'block';
     }
@@ -1155,7 +1162,6 @@ function logoutAdmin() {
     showToast('Вы вышли из режима админа');
 }
 
-// Специальная функция для мобильных (свернуть админку, но остаться админом)
 function toggleMobileAdmin() {
     document.body.classList.toggle('admin-mode');
     if (document.body.classList.contains('admin-mode')) {
@@ -1261,10 +1267,9 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
     if (!res.ok) { 
         errorEl.textContent = data.error; 
         if (res.status === 409) {
-            // СБРАСЫВАЕМ ВЫБОР ПРИ ОШИБКЕ, ЧТОБЫ ЮЗЕР НЕ ЖАЛ ПОВТОРНО
             selected.clear();
             await loadBookings(); 
-            document.getElementById('modal').hidden = true; // Закрываем модалку, чтобы было видно
+            document.getElementById('modal').hidden = true;
             showToast('Часть мест уже заняли, выберите заново!', 'error');
         }
         return; 
