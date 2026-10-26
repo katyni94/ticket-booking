@@ -88,10 +88,13 @@
   #adminBtn:hover { opacity: 1; }
   body.admin-mode #adminBtn { display: none; }
 
+  /* БОКОВАЯ ПАНЕЛЬ АДМИНА (исправлена прокрутка) */
   #adminSidebar {
-    position: fixed; right: -400px; top: 0; width: 380px; height: 100vh;
+    position: fixed; right: -400px; top: 0; bottom: 0; width: 380px;
     background: #171d27; border-left: 1px solid #2a3446; padding: 20px;
-    overflow-y: auto; z-index: 500; transition: right 0.3s; box-shadow: -5px 0 20px rgba(0,0,0,0.5);
+    overflow-y: auto; 
+    -webkit-overflow-scrolling: touch; /* Плавный скролл на телефонах */
+    z-index: 500; transition: right 0.3s; box-shadow: -5px 0 20px rgba(0,0,0,0.5);
     display: flex; flex-direction: column; gap: 10px;
   }
   body.admin-mode #adminSidebar { right: 0; }
@@ -137,13 +140,16 @@
   #saveAllBtn { background: #22c55e; color: white; width: 100%; padding: 12px; font-size: 15px; margin-top: 15px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
   #saveAllBtn:hover { background: #16a34a; }
   
-  /* Мобильный зум */
+  /* Мобильный зум и адаптация */
   @media (max-width: 768px) {
     body { padding: 10px 5px 220px; }
-    body.admin-mode { padding-right: 0; }
+    body.admin-mode { padding-right: 0; overflow: hidden; /* Отключаем скролл фона, когда открыта панель */ }
     body.admin-mode .bar { padding-right: 0; }
-    #adminSidebar { width: 100%; right: -100%; }
+    
+    /* Исправление для мобильной панели */
+    #adminSidebar { width: 100%; right: -100%; padding-bottom: 80px; /* Место под кнопки */ }
     body.admin-mode #adminSidebar { right: 0; }
+    
     body.admin-mode .hall-wrap { display: none; }
     body.admin-mode h1, body.admin-mode .sub, body.admin-mode .event-switch, body.admin-mode .stage, body.admin-mode .legend { display: none; }
     
@@ -176,7 +182,6 @@
 
 <div class="stage">СЦЕНА</div>
 
-<!-- Кнопка зума для мобильных -->
 <div style="margin-bottom:10px; display:none;" id="zoomBtnContainer">
     <button class="btn ghost" id="zoomToggleBtn" onclick="toggleZoom()" style="border: 1px solid #60a5fa; color: #60a5fa;">🔍 Уменьшить зал</button>
 </div>
@@ -533,11 +538,9 @@ if (forcedSideMode) {
     document.getElementById('eventSwitch').style.display = 'none';
     document.getElementById('btn-event-left').style.display = 'none';
     document.getElementById('btn-event-right').style.display = 'none';
-    // СКРЫВАЕМ ШЕСТЕРЕНКУ АДМИНА ДЛЯ ПОЛЬЗОВАТЕЛЕЙ
     document.getElementById('adminBtn').style.display = 'none';
 }
 
-// Проверка мобилки для кнопки зума
 if (window.innerWidth <= 768) {
     document.getElementById('zoomBtnContainer').style.display = 'block';
 }
@@ -805,7 +808,6 @@ function renderLegend() {
   });
 }
 
-// ОБНОВЛЕННЫЕ ПОДПИСИ (НА РУССКОМ)
 function updateBar(){ 
   document.getElementById('count').textContent = selected.size; 
   document.getElementById('bookBtn').disabled = selected.size === 0;
@@ -1141,7 +1143,6 @@ function selectPaint(color) {
 
 document.getElementById('adminBtn').addEventListener('click', () => {
   if (isAdminMode) {
-    // ИСПРАВЛЕНИЕ: Если панель закрыта, снова ее открываем
     document.body.classList.add('admin-mode');
     if (window.innerWidth <= 768) {
         document.getElementById('closeSidebarBtn').style.display = 'block';
