@@ -7,13 +7,54 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = "admin123";
 
+// Trust proxy: корректный req.ip за reverse proxy (Railway, Render, Vercel и т.д.)
+app.set('trust proxy', 1);
+
+// ============================================================
+// ПУЛ: запас на 50+ одновременных пользователей
+// ============================================================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
+  max: 25,                         // default 10 — повышаем для burst-нагрузки
+  idleTimeoutMillis: 30000,        // закрываем простаивающие
+  connectionTimeoutMillis: 10000,  // ждём коннект из пула не более 10 сек
+  statement_timeout: 15000,        // любой SQL — не дольше 15 сек
+  query_timeout: 15000
+});
+pool.on('error', (err) => {
+  // Без этого обработчика один дропнутый idle-коннект убивает весь процесс
+  console.error('Пул: неожиданная ошибка idle-соединения:', err.message);
 });
 
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ============================================================
+// Простой in-memory rate-limit по IP (без внешних зависимостей)
+// ============================================================
+const rateLimitStore = new Map();
+function rateLimit(windowMs, max) {
+  return (req, res, next) => {
+    const key = req.ip || 'unknown';
+    const now = Date.now();
+    let entry = rateLimitStore.get(key);
+    if (!entry || now > entry.resetAt) {
+      entry = { count: 0, resetAt: now + windowMs };
+      rateLimitStore.set(key, entry);
+    }
+    entry.count++;
+    if (entry.count > max) {
+      return res.status(429).json({ error: 'Слишком много запросов. Подождите минуту.' });
+    }
+    next();
+  };
+}
+// Чистим протухшие записи раз в минуту
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of rateLimitStore) if (now > v.resetAt) rateLimitStore.delete(k);
+}, 60000);
 
 let appSettings = {
   basePrice: 600,
@@ -26,7 +67,6 @@ let appSettings = {
   groups: { left: [], right: [] }
 };
 
-// Хелпер: оставить только цифры, последние 10 (для сравнения телефонов)
 function normPhone(p) {
   return String(p || '').replace(/\D/g, '').slice(-10);
 }
@@ -47,7 +87,6 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    // Миграции для существующих БД
     await pool.query(`ALTER TABLE bookings ALTER COLUMN seat_key TYPE VARCHAR(50);`).catch(()=>{});
     await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS firstname VARCHAR(50);`).catch(()=>{});
     await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS lastname VARCHAR(50);`).catch(()=>{});
@@ -94,7 +133,6 @@ app.get('/api/bookings', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
-// Оставлен для совместимости, но основной UI теперь использует /api/admin/person-summary
 app.get('/api/limit', async (req, res) => {
   const { firstname, lastname, phone } = req.query;
   if (!firstname || !lastname) return res.status(400).json({ error: 'Имя и фамилия обязательны' });
@@ -116,10 +154,10 @@ app.get('/api/limit', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
-// ========================================================================
-// БРОНИРОВАНИЕ (основной эндпоинт)
-// ========================================================================
-app.post('/api/bookings', async (req, res) => {
+// ============================================================
+// БРОНИРОВАНИЕ — с atomic-защитой от гонок
+// ============================================================
+app.post('/api/bookings', rateLimit(60000, 10), async (req, res) => {
   const {
     seats, firstname, lastname, phone,
     reserveFirstname, reserveLastname, groupName,
@@ -127,30 +165,41 @@ app.post('/api/bookings', async (req, res) => {
   } = req.body || {};
 
   if (!Array.isArray(seats) || seats.length === 0) return res.status(400).json({ error: 'Не выбраны места' });
+  if (seats.length > 20) return res.status(400).json({ error: 'Слишком много мест за один раз' });
 
   const digits = normPhone(phone);
   if (!firstname || firstname.trim().length < 2) return res.status(400).json({ error: 'Введите имя' });
   if (!lastname || lastname.trim().length < 2) return res.status(400).json({ error: 'Введите фамилию' });
   if (digits.length < 10) return res.status(400).json({ error: 'Введите корректный телефон' });
 
+  // Валидация резерва (раньше отсутствовала на сервере)
+  const rFName = reserveFirstname ? reserveFirstname.trim() : null;
+  const rLName = reserveLastname ? reserveLastname.trim() : null;
+  if ((rFName && !rLName) || (!rFName && rLName)) {
+    return res.status(400).json({ error: 'Для резерва нужно ввести и имя, и фамилию' });
+  }
+
   const isAdmin = (adminPass === ADMIN_PASSWORD);
-  // Если админ — решает чекбокс ignoreLimit (true = не расходовать лимит).
-  // Если клиент — всегда использует свой лимит.
   const useLimit = isAdmin ? (ignoreLimit !== true) : true;
   const isAdminBooking = isAdmin && !useLimit;
 
   const fName = firstname.trim();
   const lName = lastname.trim();
-  const rFName = reserveFirstname ? reserveFirstname.trim() : null;
-  const rLName = reserveLastname ? reserveLastname.trim() : null;
+  // Уникальный ключ пользователя для advisory lock
+  const userLockKey = `user:${fName.toLowerCase()}:${lName.toLowerCase()}:${digits}`;
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // 1) Проверка занятости мест
+    // 1) Advisory lock по пользователю: все его брони идут строго последовательно.
+    //    Это защищает проверку лимита от гонки (две вкладки одного юзера).
+    //    Другие пользователи блокируются независимо — параллелизм сохранён.
+    await client.query('SELECT pg_advisory_xact_lock(1, hashtext($1))', [userLockKey]);
+
+    // 2) Быстрая проверка — если места заняты, отдаём 409 без попытки вставки
     const { rows: existing } = await client.query(
-      'SELECT seat_key FROM bookings WHERE seat_key = ANY($1) FOR UPDATE',
+      'SELECT seat_key FROM bookings WHERE seat_key = ANY($1)',
       [seats]
     );
     if (existing.length > 0) {
@@ -161,7 +210,7 @@ app.post('/api/bookings', async (req, res) => {
       });
     }
 
-    // 2) Проверка лимита (если используем)
+    // 3) Проверка лимита (атомарна благодаря lock выше)
     if (useLimit) {
       const { rows: userRows } = await client.query(
         `SELECT COUNT(*) as count FROM bookings
@@ -188,7 +237,6 @@ app.post('/api/bookings', async (req, res) => {
         return res.status(409).json({ error: msg, code: 'LIMIT_EXCEEDED', used: userUsed, max, left });
       }
 
-      // Резерв — проверка по имени (без телефона, т.к. в интерфейсе его нет)
       if (rFName && rLName) {
         const { rows: resRows } = await client.query(
           `SELECT COUNT(*) as count FROM bookings
@@ -211,27 +259,38 @@ app.post('/api/bookings', async (req, res) => {
       }
     }
 
-    // 3) Вставка
+    // 4) Атомарная вставка. ON CONFLICT (seat_key) DO NOTHING — если в момент
+    //    между проверкой (шаг 2) и INSERT другой пользователь успел занять
+    //    это место, конфликт не выбросит исключение, а вернёт 0 строк.
+    //    Проверяем это и откатываем всю транзакцию.
     for (const seat of seats) {
-      await client.query(
+      const r = await client.query(
         `INSERT INTO bookings
            (seat_key, firstname, lastname, phone, reserve_firstname, reserve_lastname, group_name, status, is_admin_booking)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'booked', $8)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'booked', $8)
+         ON CONFLICT (seat_key) DO NOTHING
+         RETURNING seat_key`,
         [seat, fName, lName, phone.trim(), rFName, rLName, groupName || '', isAdminBooking]
       );
+      if (r.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'Эти места уже выбрал кто-то другой 🥲. Обновите страницу.',
+          code: 'SEATS_TAKEN'
+        });
+      }
     }
+
     await client.query('COMMIT');
     const { rows: all } = await client.query("SELECT seat_key, status FROM bookings");
     res.json({ ok: true, booked: all, adminBooking: isAdminBooking });
   } catch (err) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Ошибка при бронировании: ' + err.message });
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('Ошибка бронирования:', err.message);
+    res.status(500).json({ error: 'Ошибка при бронировании. Попробуйте ещё раз.' });
   } finally { client.release(); }
 });
 
-// ========================================================================
-// МОИ БИЛЕТЫ (теперь с телефоном)
-// ========================================================================
 app.get('/api/my-tickets', async (req, res) => {
   const { firstname, lastname, phone } = req.query;
   if (!firstname || !lastname) return res.status(400).json({ error: 'Введите имя и фамилию' });
@@ -253,10 +312,7 @@ app.get('/api/my-tickets', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
 });
 
-// ========================================================================
-// ОТМЕНА (только своих — по имени+фамилии+телефону)
-// ========================================================================
-app.post('/api/cancel', async (req, res) => {
+app.post('/api/cancel', rateLimit(60000, 20), async (req, res) => {
   const { seats, firstname, lastname, phone } = req.body || {};
   if (!seats || !seats.length) return res.status(400).json({ error: 'Не выбраны места' });
   const digits = normPhone(phone);
@@ -277,9 +333,6 @@ app.post('/api/cancel', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка при отмене' }); }
 });
 
-// ========================================================================
-// АДМИН: сводка по человеку (для информационной плашки в форме брони)
-// ========================================================================
 app.get('/api/admin/person-summary', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
   const { firstname, lastname, phone } = req.query;
@@ -313,9 +366,6 @@ app.get('/api/admin/person-summary', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
 });
 
-// ========================================================================
-// АДМИН: остальные эндпоинты
-// ========================================================================
 app.post('/api/admin/toggle-block', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
   const { seat } = req.body;
@@ -330,7 +380,7 @@ app.post('/api/admin/toggle-block', async (req, res) => {
       }
     } else {
       await pool.query(
-        "INSERT INTO bookings (seat_key, firstname, phone, status) VALUES ($1, 'Админ', 'Заблокировано', 'blocked')",
+        "INSERT INTO bookings (seat_key, firstname, phone, status) VALUES ($1, 'Админ', 'Заблокировано', 'blocked') ON CONFLICT (seat_key) DO NOTHING",
         [seat]
       );
       return res.json({ status: 'blocked' });
@@ -393,9 +443,6 @@ app.post('/api/admin/bulk-edit', async (req, res) => {
   }
 });
 
-// ========================================================================
-// ЭКСПОРТ EXCEL (добавлена колонка «Админ»)
-// ========================================================================
 app.get('/api/admin/export', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   try {
@@ -475,9 +522,6 @@ app.get('/api/admin/export', async (req, res) => {
   } catch (err) { res.status(500).send('Ошибка экспорта: ' + err.message); }
 });
 
-// ========================================================================
-// ЭКСПОРТ WORD (добавлена колонка «Админ»)
-// ========================================================================
 app.get('/api/admin/export-word', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   try {
