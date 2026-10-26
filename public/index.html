@@ -13,7 +13,7 @@
   }
   *{box-sizing:border-box}
   body{
-    margin:0; min-height:100vh; padding:20px 10px 100px;
+    margin:0; min-height:100vh; padding:20px 10px 120px;
     font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
     color:var(--text); display:flex; flex-direction:column; align-items:center;
     background-color: var(--bg); background-image: var(--bg-image);
@@ -34,8 +34,15 @@
   .stage{ width:min(400px,80%); height:40px; border-radius:0 0 50% 50%; background:#2a3446; display:flex; align-items:center; justify-content:center; color:#8b97a8; font-weight:600; letter-spacing:2px; text-transform:uppercase; margin-bottom:30px; border-top:4px solid #1f2735; }
   .zone-title{font-size:11px; color:var(--muted); text-transform:uppercase; margin:15px 0 5px; font-weight:600; text-align:center}
   
-  .hall-wrap{width:100%; max-width:100%; overflow-x:auto; padding-bottom:20px; display:flex; justify-content:center;}
-  .hall-layout { display: flex; justify-content: center; gap: 30px; align-items: flex-start; }
+  /* Исправлен скролл для мобилок */
+  .hall-wrap{
+    width:100%; max-width:100%; overflow-x:auto; padding-bottom:20px; display:flex; justify-content:center;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .hall-layout { display: flex; justify-content: flex-start; gap: 30px; align-items: flex-start; min-width: max-content;}
+  @media (min-width: 1024px) { .hall-layout { justify-content: center; } }
+  
   .col { display: flex; flex-direction: column; align-items: center; }
   .row { display: flex; gap: 4px; justify-content: center; margin-bottom: 4px; min-height: 20px; }
   
@@ -77,10 +84,11 @@
   .btn.ghost{background:#242d3b; color:var(--text)}
   .btn.ghost:hover{background:#2e3a4c}
 
-  #adminBtn { position: fixed; bottom: 15px; right: 15px; opacity: 0.2; font-size: 20px; padding: 5px 10px; border-radius: 50%; z-index: 1000; transition: 0.2s; background: #242d3b; color: #fff; border: none; cursor: pointer; }
+  #adminBtn { position: fixed; top: 15px; right: 15px; opacity: 0.2; font-size: 20px; padding: 5px 10px; border-radius: 50%; z-index: 1000; transition: 0.2s; background: #242d3b; color: #fff; border: none; cursor: pointer; }
   #adminBtn:hover { opacity: 1; }
   body.admin-mode #adminBtn { display: none; }
 
+  /* БОКОВАЯ ПАНЕЛЬ АДМИНА */
   #adminSidebar {
     position: fixed; right: -400px; top: 0; width: 380px; height: 100vh;
     background: #171d27; border-left: 1px solid #2a3446; padding: 20px;
@@ -123,11 +131,6 @@
   .toast.show{opacity:1; transform:translate(-50%, -50%) scale(1);}
   .toast.error { background: #8b1c1c; color: #ffdede; box-shadow: 0 0 20px rgba(139, 28, 28, 0.6); }
 
-  #tooltip { position: fixed; z-index: 999; background: #fff; color: #111; border-radius: 8px; padding: 10px 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); pointer-events: none; display: none; text-align: center; font-size: 13px; min-width: 150px; transform: translate(-50%, -120%); }
-  #tooltip .t-row { font-weight: 700; font-size: 15px; margin-bottom: 2px; color: #000; }
-  #tooltip .t-zone { color: #666; font-size: 12px; margin-bottom: 4px; }
-  #tooltip .t-price { font-weight: 600; color: #222; }
-
   .price-item-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; font-size: 12px; border-bottom: 1px solid #222; padding-bottom: 5px;}
   .price-item-row span { color: #ccc; flex: 1; }
   .price-item-row input { width: 70px !important; margin: 0 !important; padding: 4px !important; font-size: 12px !important;}
@@ -135,19 +138,25 @@
   #saveAllBtn { background: #22c55e; color: white; width: 100%; padding: 12px; font-size: 15px; margin-top: 15px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
   #saveAllBtn:hover { background: #16a34a; }
   
+  /* Мобильная адаптация */
   @media (max-width: 768px) {
-    body { padding: 10px 5px 120px; }
+    body { padding: 10px 5px 140px; }
     body.admin-mode { padding-right: 0; }
     body.admin-mode .bar { padding-right: 0; }
+    
+    /* Панель админа на телефоне */
     #adminSidebar { width: 100%; right: -100%; }
     body.admin-mode #adminSidebar { right: 0; }
-    .seat { width: 14px; height: 14px; font-size: 7px; border-radius: 3px 3px 1px 1px; }
-    .row { gap: 2px; margin-bottom: 2px; }
-    .dj-booth, .wall-block { height: 14px; font-size: 8px; }
-    .aisle { height: 14px; }
-    .hall-layout { gap: 10px; }
+    body.admin-mode .hall-wrap { display: none; } /* Прячем зал, когда открыта админка на телефоне */
+    body.admin-mode h1, body.admin-mode .sub, body.admin-mode .event-switch, body.admin-mode .stage, body.admin-mode .legend { display: none; }
+    
+    .seat { width: 16px; height: 16px; font-size: 8px; border-radius: 3px 3px 1px 1px; }
+    .row { gap: 3px; margin-bottom: 3px; }
+    .dj-booth, .wall-block { height: 16px; font-size: 8px; }
+    .aisle { height: 16px; }
+    
     .event-switch { flex-direction: column; width: 100%; max-width: 300px; }
-    .bar { padding: 8px; gap: 8px; }
+    .bar { padding: 10px; gap: 10px; flex-direction: column; }
     .btn { padding: 8px 12px; font-size: 12px; }
     body.admin-mode #paintPalette { transform: translateX(-50%); bottom: 140px; }
   }
@@ -210,7 +219,11 @@
 </div>
 
 <div id="adminSidebar">
-  <h2 style="margin-top:0;">Панель управления</h2>
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+    <h2 style="margin:0;">Панель управления</h2>
+    <!-- Кнопка для мобильных, чтобы вернуться к залу -->
+    <button class="btn primary" style="display:none; padding: 5px 10px;" id="closeSidebarBtn" onclick="toggleMobileAdmin()">✕ Закрыть</button>
+  </div>
   
   <div style="display:flex; gap:10px; margin-bottom: 5px;">
     <button class="btn primary" style="width: 100%; background:#22c55e; padding: 12px; font-size: 14px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD, '_blank')">📥 Скачать таблицу (Excel)</button>
@@ -308,13 +321,19 @@
   </details>
 
   <button id="saveAllBtn" onclick="saveSettings()">💾 Сохранить все настройки</button>
+  
+  <!-- Кнопка выхода для мобилок и ПК -->
   <button class="btn" style="margin-top:10px; background:#7c3aed; color:white; padding:10px;" onclick="logoutAdmin()">Выйти из Админа</button>
 </div>
 
 <button class="btn ghost" id="adminBtn" title="Вход для администратора">⚙</button>
 
 <div class="bar">
-  <div>Выбрано: <b id="count">0</b></div>
+  <div style="display:flex; flex-direction:column; align-items:flex-start; width: 100%; max-width:400px;">
+    <div style="margin-bottom:5px;">Выбрано: <b id="count">0</b></div>
+    <div id="selected-seats-info" style="font-size:11px; color:var(--muted); max-width:100%; word-break:break-word; margin-bottom:10px;">Места не выбраны</div>
+  </div>
+  <button class="btn ghost" id="clearSelectionBtn" style="display:none; border: 1px solid #f87171; color:#f87171;" onclick="clearAllSelection()">✕ Сбросить</button>
   <button class="btn ghost" id="myTicketsBtn" style="border: 1px solid #3b82f6; color: #60a5fa;">Мои билеты</button>
   <button class="btn ghost" id="cancelBtnOpen">Отменить</button>
   <button class="btn primary" id="bookBtn" disabled>Забронировать</button>
@@ -406,7 +425,7 @@
   </div>
 </div>
 
-<!-- НОВАЯ МОДАЛКА: ПРИНУДИТЕЛЬНАЯ ОТМЕНА АДМИНОМ -->
+<!-- МОДАЛКА ПРИНУДИТЕЛЬНОЙ ОТМЕНЫ АДМИНОМ -->
 <div class="modal" id="forceCancelModal" hidden>
   <div class="modal-card">
     <h2>Снятие брони</h2>
@@ -417,12 +436,6 @@
     </div>
     <p class="error" id="forceCancelError"></p>
   </div>
-</div>
-
-<div id="tooltip">
-  <div class="t-row" id="tt-row"></div>
-  <div class="t-zone" id="tt-zone"></div>
-  <div class="t-price" id="tt-price"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -585,7 +598,7 @@ function createSeat(key, num, title, color, price, side, zoneName, rowNum) {
   
   if (bookedSet.has(key)) {
     if (bookedSet.has(key + '_blocked')) btn.classList.add('blocked');
-    else { btn.classList.add('booked'); } // Убрано btn.disabled = true;
+    else { btn.classList.add('booked'); }
   }
   if (selected.has(key)) btn.classList.add('selected');
   return btn;
@@ -697,10 +710,10 @@ function renderColorPricesList() {
     document.getElementById('base-price-input').value = priceSettings.basePrice || 600;
     
     const colors = [
-        { hex: '#FFC000', name: 'Оранжевый' },
-        { hex: '#FFFF00', name: 'Желтый' },
+        { hex: '#FFC000', name: 'Желтый' },
+        { hex: '#FFFF00', name: 'Салатовый' },
         { hex: '#92D050', name: 'Зеленый' },
-        { hex: '#C55A11', name: 'Кирпичный' },
+        { hex: '#C55A11', name: 'Оранжевый' },
         { hex: '#00B0F0', name: 'Голубой' },
         { hex: '#B4A7D6', name: 'Фиолетовый' },
         { hex: '#F4B183', name: 'Розовый' }
@@ -741,9 +754,7 @@ function updateBasePrice(val) {
 function renderLegend() {
   const legendDiv = document.getElementById('priceLegend');
   legendDiv.innerHTML = '';
-  
   let items = [];
-  
   if (priceSettings.colorPrices) {
       for (let color in priceSettings.colorPrices) {
           if (priceSettings.rules && priceSettings.rules.some(r => r.color === color)) {
@@ -751,16 +762,44 @@ function renderLegend() {
           }
       }
   }
-  
   items.push({ color: '#2a3342', price: priceSettings.basePrice || 600 });
   items.sort((a, b) => a.price - b.price);
-  
   items.forEach(item => {
       legendDiv.innerHTML += `<span><i class="dot" style="background:${item.color}"></i>${item.price}₽</span>`;
   });
 }
 
-function updateBar(){ document.getElementById('count').textContent = selected.size; document.getElementById('bookBtn').disabled = selected.size === 0; }
+// ОБНОВЛЕННАЯ ПАНЕЛЬ С ИНФО О ВЫБРАННЫХ МЕСТАХ
+function updateBar(){ 
+  document.getElementById('count').textContent = selected.size; 
+  document.getElementById('bookBtn').disabled = selected.size === 0;
+  
+  const clearBtn = document.getElementById('clearSelectionBtn');
+  const infoDiv = document.getElementById('selected-seats-info');
+  
+  if (selected.size === 0) {
+      clearBtn.style.display = 'none';
+      infoDiv.innerHTML = 'Места не выбраны';
+  } else {
+      clearBtn.style.display = 'inline-block';
+      let textArr = [];
+      selected.forEach(k => {
+          let parts = k.split('-');
+          let r = parts[parts.length-2];
+          let c = parts[parts.length-1];
+          let zoneStr = parts[0];
+          let zoneName = zoneStr === 'parterre' ? 'Партер' : (zoneStr === 'central' ? 'ЦБ' : 'Балкон');
+          textArr.push(`${zoneName} (Р${r}-М${c})`);
+      });
+      infoDiv.innerHTML = textArr.join(', ');
+  }
+}
+
+function clearAllSelection() {
+    selected.clear();
+    render();
+    showToast('Выбор мест сброшен');
+}
 
 function updateHideButtons() {
     if (!isAdminMode) return;
@@ -838,22 +877,6 @@ async function loadBookings(){
     render();
   } catch (e) { render(); }
 }
-
-const tooltip = document.getElementById('tooltip');
-document.body.addEventListener('mouseover', e => {
-  const btn = e.target.closest('.seat'); if (!btn) return;
-  document.getElementById('tt-row').textContent = `ряд: ${btn.dataset.row}, место: ${btn.dataset.seat}`;
-  document.getElementById('tt-zone').textContent = btn.dataset.zone;
-  document.getElementById('tt-price').textContent = `${btn.dataset.price} руб.`;
-  tooltip.style.display = 'block';
-  if (isAdminMode && adminActionMode === 'paint' && paintStart) btn.classList.add('painting');
-});
-document.body.addEventListener('mousemove', e => {
-  if (tooltip.style.display === 'block') { tooltip.style.left = e.clientX + 'px'; tooltip.style.top = e.clientY + 'px'; }
-});
-document.body.addEventListener('mouseout', e => {
-  if (e.target.closest('.seat')) { tooltip.style.display = 'none'; e.target.closest('.seat').classList.remove('painting'); }
-});
 
 document.body.addEventListener('click', async e => {
   const btn = e.target.closest('.seat');
@@ -1112,6 +1135,12 @@ function loginAdminUI() {
     isAdminMode = true;
     document.body.classList.add('admin-mode');
     document.getElementById('adminBtn').style.display = 'none';
+    
+    // Показываем кнопку закрытия панели на мобильных
+    if (window.innerWidth <= 768) {
+        document.getElementById('closeSidebarBtn').style.display = 'block';
+    }
+    
     updateHideButtons(); render();
 }
 
@@ -1124,6 +1153,17 @@ function logoutAdmin() {
     adminModeSelect.value = 'block'; adminActionMode = 'block';
     render();
     showToast('Вы вышли из режима админа');
+}
+
+// Специальная функция для мобильных (свернуть админку, но остаться админом)
+function toggleMobileAdmin() {
+    document.body.classList.toggle('admin-mode');
+    if (document.body.classList.contains('admin-mode')) {
+        document.getElementById('adminBtn').style.display = 'none';
+    } else {
+        document.getElementById('adminBtn').style.display = 'block';
+        showToast('Панель скрыта. Нажмите ⚙ чтобы вернуть.');
+    }
 }
 
 if (localStorage.getItem('hall_admin') === 'true') { loginAdminUI(); }
@@ -1220,7 +1260,13 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
     const data = await res.json();
     if (!res.ok) { 
         errorEl.textContent = data.error; 
-        if (res.status === 409) await loadBookings(); 
+        if (res.status === 409) {
+            // СБРАСЫВАЕМ ВЫБОР ПРИ ОШИБКЕ, ЧТОБЫ ЮЗЕР НЕ ЖАЛ ПОВТОРНО
+            selected.clear();
+            await loadBookings(); 
+            document.getElementById('modal').hidden = true; // Закрываем модалку, чтобы было видно
+            showToast('Часть мест уже заняли, выберите заново!', 'error');
+        }
         return; 
     }
     selected.clear(); document.getElementById('modal').hidden = true; loadBookings(); showToast('Успешно забронировано!');
