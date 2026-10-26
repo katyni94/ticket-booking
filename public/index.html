@@ -13,14 +13,14 @@
   }
   *{box-sizing:border-box}
   body{
-    margin:0; min-height:100vh; padding:20px 10px 120px;
+    margin:0; min-height:100vh; padding:20px 10px 220px;
     font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
     color:var(--text); display:flex; flex-direction:column; align-items:center;
     background-color: var(--bg); background-image: var(--bg-image);
     background-size: var(--bg-size); background-position: var(--bg-pos);
     background-repeat: no-repeat; position: relative; transition: padding-right 0.3s;
   }
-  @media (min-width: 769px) { body { background-attachment: fixed; } }
+  @media (min-width: 769px) { body { background-attachment: fixed; padding-bottom: 120px; } }
   body.admin-mode { padding-right: 380px; }
   body::before { content: ""; position: fixed; inset: 0; background: rgba(15, 19, 25, 0.85); z-index: -1; pointer-events: none; }
 
@@ -37,6 +37,7 @@
   .hall-wrap{
     width:100%; max-width:100%; overflow-x:auto; padding-bottom:20px; display:flex; justify-content:center;
     -webkit-overflow-scrolling: touch;
+    transition: all 0.3s ease;
   }
   
   .hall-layout { display: flex; justify-content: flex-start; gap: 30px; align-items: flex-start; min-width: max-content;}
@@ -136,19 +137,26 @@
   #saveAllBtn { background: #22c55e; color: white; width: 100%; padding: 12px; font-size: 15px; margin-top: 15px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
   #saveAllBtn:hover { background: #16a34a; }
   
+  /* Мобильный зум */
   @media (max-width: 768px) {
-    /* Увеличили отступ снизу, чтобы бар не перекрывал контент */
-    body { padding: 10px 5px 220px; } 
+    body { padding: 10px 5px 220px; }
     body.admin-mode { padding-right: 0; }
     body.admin-mode .bar { padding-right: 0; }
     #adminSidebar { width: 100%; right: -100%; }
     body.admin-mode #adminSidebar { right: 0; }
     body.admin-mode .hall-wrap { display: none; }
     body.admin-mode h1, body.admin-mode .sub, body.admin-mode .event-switch, body.admin-mode .stage, body.admin-mode .legend { display: none; }
+    
     .seat { width: 16px; height: 16px; font-size: 8px; border-radius: 3px 3px 1px 1px; }
     .row { gap: 3px; margin-bottom: 3px; }
     .dj-booth, .wall-block { height: 16px; font-size: 8px; }
     .aisle { height: 16px; }
+    
+    body.zoomed-out .seat { width: 9px; height: 9px; font-size: 0; border-radius: 2px 2px 0 0; border: none; }
+    body.zoomed-out .dj-booth, body.zoomed-out .wall-block { height: 9px; font-size: 0; border:none; }
+    body.zoomed-out .aisle { height: 9px; }
+    body.zoomed-out .row { gap: 1px; margin-bottom: 1px; }
+    
     .event-switch { flex-direction: column; width: 100%; max-width: 300px; }
     .bar { padding: 10px; gap: 10px; flex-direction: column; }
     .btn { padding: 8px 12px; font-size: 12px; }
@@ -167,6 +175,11 @@
 </div>
 
 <div class="stage">СЦЕНА</div>
+
+<!-- Кнопка зума для мобильных -->
+<div style="margin-bottom:10px; display:none;" id="zoomBtnContainer">
+    <button class="btn ghost" id="zoomToggleBtn" onclick="toggleZoom()" style="border: 1px solid #60a5fa; color: #60a5fa;">🔍 Уменьшить зал</button>
+</div>
 
 <div class="hall-wrap">
   <div class="hall-layout">
@@ -218,8 +231,9 @@
     <button class="btn primary" style="display:none; padding: 5px 10px;" id="closeSidebarBtn" onclick="toggleMobileAdmin()">✕ Закрыть</button>
   </div>
   
-  <div style="display:flex; gap:10px; margin-bottom: 5px;">
-    <button class="btn primary" style="width: 100%; background:#22c55e; padding: 12px; font-size: 14px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD, '_blank')">📥 Скачать таблицу (Excel)</button>
+  <div style="display:flex; flex-direction:column; gap:10px; margin-bottom: 5px;">
+    <button class="btn primary" style="width: 100%; background:#22c55e; padding: 12px; font-size: 14px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD, '_blank')">📥 Скачать Excel</button>
+    <button class="btn primary" style="width: 100%; background:#2b579a; padding: 12px; font-size: 14px;" onclick="window.open('/api/admin/export-word?pass=' + ADMIN_PASSWORD, '_blank')">📄 Скачать Word</button>
   </div>
 
   <details class="sidebar-section" open>
@@ -519,6 +533,23 @@ if (forcedSideMode) {
     document.getElementById('eventSwitch').style.display = 'none';
     document.getElementById('btn-event-left').style.display = 'none';
     document.getElementById('btn-event-right').style.display = 'none';
+    // СКРЫВАЕМ ШЕСТЕРЕНКУ АДМИНА ДЛЯ ПОЛЬЗОВАТЕЛЕЙ
+    document.getElementById('adminBtn').style.display = 'none';
+}
+
+// Проверка мобилки для кнопки зума
+if (window.innerWidth <= 768) {
+    document.getElementById('zoomBtnContainer').style.display = 'block';
+}
+
+function toggleZoom() {
+    document.body.classList.toggle('zoomed-out');
+    const btn = document.getElementById('zoomToggleBtn');
+    if (document.body.classList.contains('zoomed-out')) {
+        btn.textContent = '🔍 Увеличить зал';
+    } else {
+        btn.textContent = '🔍 Уменьшить зал';
+    }
 }
 
 function formatPhone(input) {
@@ -582,7 +613,7 @@ function createSeat(key, num, title, color, price, side, zoneName, rowNum) {
   btn.type = 'button'; btn.className = 'seat'; btn.dataset.key = key; btn.dataset.side = side; btn.dataset.zone = zoneName;
   btn.dataset.row = rowNum; btn.dataset.seat = num; btn.dataset.price = price; btn.textContent = num;
   btn.style.background = color;
-  btn.dataset.color = color; // ВАЖНО: сохраняем цвет в data-атрибут для легенды
+  btn.dataset.color = color;
   
   if (side !== currentEvent) btn.classList.add('disabled');
   if (priceSettings.hidden && priceSettings.hidden[side]) btn.classList.add('hidden-side');
@@ -774,6 +805,7 @@ function renderLegend() {
   });
 }
 
+// ОБНОВЛЕННЫЕ ПОДПИСИ (НА РУССКОМ)
 function updateBar(){ 
   document.getElementById('count').textContent = selected.size; 
   document.getElementById('bookBtn').disabled = selected.size === 0;
@@ -793,7 +825,7 @@ function updateBar(){
           let c = parts[parts.length-1];
           let zoneStr = parts[0];
           let zoneName = zoneStr === 'parterre' ? 'Партер' : (zoneStr === 'central' ? 'ЦБ' : 'Балкон');
-          textArr.push(`${zoneName} (Р${r}-М${c})`);
+          textArr.push(`${zoneName} (Ряд ${r}, Место ${c})`);
       });
       infoDiv.innerHTML = textArr.join(', ');
   }
