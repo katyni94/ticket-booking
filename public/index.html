@@ -70,6 +70,9 @@
   .seat.booked{background:var(--booked) !important; color:transparent; cursor:not-allowed;}
   .seat.blocked{background:var(--blocked) !important; color:transparent; cursor:pointer; border:1px solid #333;}
   
+  /* ИСПРАВЛЕНИЕ КУРСОРА ДЛЯ АДМИНА */
+  body.admin-mode .seat.booked { cursor: pointer !important; }
+
   .seat.hidden-side { opacity: 0.05; pointer-events: none; filter: grayscale(100%); }
   body.admin-mode .seat.hidden-side { opacity: 0.5; pointer-events: auto; border: 1px dashed #888; }
   
@@ -118,6 +121,7 @@
   select.mode-select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #2a3446; background: #1f2937; color: #fff; font-weight: bold; font-size: 13px; outline: none; cursor: pointer; }
   select.mode-select.mode-book { border-color: #3b82f6; color: #60a5fa; }
   select.mode-select.mode-paint { border-color: #eab308; color: #facc15; }
+  select.mode-select.mode-manage { border-color: #ec4899; color: #f472b6; }
 
   input[type="range"] { width: 100%; margin-bottom: 10px; }
   input[type="number"], input[type="text"], input[type="url"], input[type="tel"], select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #2a3446; background: #1f2937; color: #fff; margin-bottom: 10px; font-family: inherit; }
@@ -148,7 +152,6 @@
   #saveAllBtn { background: #22c55e; color: white; width: 100%; padding: 12px; font-size: 15px; margin-top: 15px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
   #saveAllBtn:hover { background: #16a34a; }
 
-  /* Оверлей загрузки */
   #loadingOverlay {
     position: fixed; inset: 0; background: rgba(15, 19, 25, 0.95);
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -194,7 +197,6 @@
 </head>
 <body>
 
-<!-- Оверлей загрузки -->
 <div id="loadingOverlay">
   <div class="spinner"></div>
   <div class="loading-text">Загрузка зала...</div>
@@ -270,6 +272,7 @@
     <button class="btn primary" style="width: 100%; background:#2b579a; padding: 12px; font-size: 14px;" onclick="window.open('/api/admin/export-word?pass=' + ADMIN_PASSWORD, '_blank')">📄 Скачать Word</button>
   </div>
 
+  <!-- ОСТАВЛЯЕМ ОТКРЫТОЙ ТОЛЬКО СТАТИСТИКУ -->
   <details class="sidebar-section" open>
     <summary>Статистика</summary>
     <div class="details-content">
@@ -280,18 +283,20 @@
     </div>
   </details>
 
-  <details class="sidebar-section" open>
+  <!-- ОСТАЛЬНЫЕ ЗАКРЫТЫ -->
+  <details class="sidebar-section">
     <summary>Режим работы</summary>
     <div class="details-content">
       <select id="adminModeSelect" class="mode-select">
-        <option value="block">🛠 Блокировка / Снятие броней</option>
+        <option value="block">🛠 Блокировка мест</option>
+        <option value="manage">✏️ Управление бронями</option>
         <option value="book">🎟 Бронирование на клиента</option>
         <option value="paint">🏷 Категории (цены)</option>
       </select>
     </div>
   </details>
 
-  <details class="sidebar-section" open>
+  <details class="sidebar-section">
     <summary>Редактор цен</summary>
     <div class="details-content">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
@@ -300,6 +305,19 @@
       </div>
       <label style="font-size: 11px; margin-bottom: 5px;">Справочник цен по цветам:</label>
       <div id="color-prices-list"></div>
+    </div>
+  </details>
+
+  <!-- НОВЫЙ БЛОК: МАССОВОЕ РЕДАКТИРОВАНИЕ -->
+  <details class="sidebar-section">
+    <summary>Массовое редактирование</summary>
+    <div class="details-content">
+        <p style="font-size:11px; color:var(--muted); margin-bottom:10px;">Введите номер телефона человека, чьи билеты нужно исправить.</p>
+        <label>Старый телефон <input type="tel" id="bulk-old-phone" oninput="formatPhone(this)"></label>
+        <label>Новая фамилия <input type="text" id="bulk-new-lastname"></label>
+        <label>Новое имя <input type="text" id="bulk-new-firstname"></label>
+        <label>Новый телефон <input type="tel" id="bulk-new-phone" oninput="formatPhone(this)"></label>
+        <button class="btn primary" style="width:100%; background:#eab308;" onclick="bulkEdit()">Применить ко всем</button>
     </div>
   </details>
 
@@ -374,7 +392,7 @@
   </div>
   <button class="btn ghost" id="clearSelectionBtn" style="display:none; border: 1px solid #f87171; color:#f87171;" onclick="clearAllSelection()">✕ Сбросить</button>
   <button class="btn ghost" id="myTicketsBtn" style="border: 1px solid #3b82f6; color: #60a5fa;">Мои билеты</button>
-  <button class="btn ghost" id="cancelBtnOpen">Отменить</button>
+  <button class="btn ghost" id="cancelBtnOpen">Снять свою бронь</button>
   <button class="btn primary" id="bookBtn" disabled>Забронировать</button>
 </div>
 
@@ -448,7 +466,8 @@
 <!-- МОДАЛКА ОТМЕНЫ (ДЛЯ КЛИЕНТОВ) -->
 <div class="modal" id="cancelModal" hidden>
   <div class="modal-card">
-    <h2>Отмена брони</h2>
+    <h2>Снять свою бронь</h2>
+    <p style="font-size:12px; color:var(--muted); margin-bottom:15px;">Введите данные, указанные при бронировании. Вы можете снять только свои билеты.</p>
     <div style="display:flex; gap:10px; margin-bottom:10px;">
         <input id="cancelLastname" type="text" placeholder="Фамилия" style="flex:1; margin:0;">
         <input id="cancelFirstname" type="text" placeholder="Имя" style="flex:1; margin:0;">
@@ -459,7 +478,7 @@
     </div>
     <div id="myBookingsList" style="margin-top:20px; display:none;">
        <div id="seatsToCancel" style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:15px;"></div>
-       <button type="button" class="btn primary" style="width:100%; background:#ef4444;" onclick="cancelBookings()">Отменить выбранные</button>
+       <button type="button" class="btn primary" style="width:100%; background:#ef4444;" onclick="cancelBookings()">Подтвердить снятие</button>
     </div>
   </div>
 </div>
@@ -470,7 +489,6 @@
     <h2>Управление бронью</h2>
     <div id="forceCancelInfo" style="font-size:14px; margin-bottom:20px; line-height:1.6;"></div>
     
-    <!-- Блок редактирования (скрыт по умолчанию) -->
     <div id="editFields" style="display:none; border-top: 1px solid #333; padding-top: 15px; margin-bottom: 20px;">
        <div style="display:flex; gap:10px; margin-bottom:10px;">
         <label style="flex:1; font-size:13px; color:var(--muted);">Фамилия <input id="edit-lastname" type="text" style="margin-top:5px;"></label>
@@ -507,7 +525,7 @@ let bookedSet = new Set();
 let selected  = new Set();
 let cancelSeats = new Set();
 let isAdminMode = false;
-let adminActionMode = 'block';
+let adminActionMode = 'block'; // block, manage, book, paint
 let priceSettings = {};
 let activePaint = null;
 let paintStart = null;
@@ -917,14 +935,11 @@ async function fetchWithRetry(url, options, retries = 3, delay = 2000) {
         try {
             const res = await fetch(url, options);
             if (res.ok) return res;
-            // Если это 4xx ошибка, нет смысла повторять
             if (res.status >= 400 && res.status < 500) return res;
-        } catch (e) {
-            console.log(`Попытка ${i+1} не удалась, ждем ${delay}мс...`);
-        }
+        } catch (e) {}
         await new Promise(r => setTimeout(r, delay));
     }
-    throw new Error('Сетевая ошибка или таймаут');
+    throw new Error('Сетевая ошибка');
 }
 
 async function loadSettings() {
@@ -960,7 +975,7 @@ async function loadSettings() {
     document.getElementById('loadingOverlay').classList.add('hidden');
   } catch (e) { 
     console.error('Ошибка загрузки настроек:', e); 
-    document.getElementById('loadingOverlay').classList.add('hidden'); // Скрываем, чтобы показать зал даже без настроек
+    document.getElementById('loadingOverlay').classList.add('hidden');
   }
 }
 
@@ -1048,9 +1063,10 @@ document.body.addEventListener('click', async e => {
 
   if (paintStart && paintStart.applySingle) { paintStart.applySingle(); paintStart = null; document.querySelectorAll('.painting').forEach(el => el.classList.remove('painting')); }
 
+  // РЕЖИМ БЛОКИРОВКИ (только для пустых мест)
   if (isAdminMode && adminActionMode === 'block') {
     if (btn.classList.contains('booked')) {
-      openForceCancelModal(key);
+      showToast('Это место забронировано. Переключитесь в "Управление бронями" для редактирования.', 'error');
       return;
     }
     if (btn.classList.contains('blocked')) {
@@ -1061,6 +1077,21 @@ document.body.addEventListener('click', async e => {
     return;
   }
 
+  // РЕЖИМ УПРАВЛЕНИЯ БРОНЯМИ (только для занятых мест)
+  if (isAdminMode && adminActionMode === 'manage') {
+    if (btn.classList.contains('booked')) {
+      openForceCancelModal(key);
+      return;
+    }
+    if (btn.classList.contains('blocked')) {
+      showToast('Это место заблокировано. Переключитесь в режим "Блокировка".', 'error');
+      return;
+    }
+    showToast('Это место свободно.', 'error');
+    return;
+  }
+
+  // ОБЫЧНЫЙ РЕЖИМ
   if (btn.classList.contains('booked') || btn.classList.contains('blocked') || btn.classList.contains('disabled') || btn.disabled) return;
 
   if (selected.has(key)) {
@@ -1098,7 +1129,6 @@ async function openForceCancelModal(seatKey) {
         
         document.getElementById('forceCancelInfo').innerHTML = infoText;
 
-        // Заполняем поля для редактирования
         document.getElementById('edit-lastname').value = data.lastname || '';
         document.getElementById('edit-firstname').value = data.firstname || '';
         document.getElementById('edit-phone').value = data.phone || '';
@@ -1189,6 +1219,37 @@ async function confirmForceCancel() {
     }
 }
 
+// МАССОВОЕ РЕДАКТИРОВАНИЕ
+async function bulkEdit() {
+    const oldPhone = document.getElementById('bulk-old-phone').value.trim();
+    const newLastname = document.getElementById('bulk-new-lastname').value.trim();
+    const newFirstname = document.getElementById('bulk-new-firstname').value.trim();
+    const newPhone = document.getElementById('bulk-new-phone').value.trim();
+
+    if (oldPhone.length < 10 || newLastname.length < 2 || newFirstname.length < 2 || newPhone.length < 10) {
+        return alert('Заполните все поля корректно');
+    }
+
+    if (!confirm(`Вы уверены, что хотите изменить данные ВСЕХ билетов, привязанных к номеру ${oldPhone}?`)) return;
+
+    try {
+        const res = await fetch(`/api/admin/bulk-edit?pass=${ADMIN_PASSWORD}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ oldPhone, newFirstname, newLastname, newPhone })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            alert(`Успешно обновлено броней: ${data.updated}`);
+            loadBookings();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестно'));
+        }
+    } catch (e) {
+        alert('Ошибка сети');
+    }
+}
+
 document.addEventListener('click', (e) => {
     if (paintStart && paintStart.applySingle && !e.target.closest('.seat')) {
         paintStart.applySingle();
@@ -1254,7 +1315,7 @@ function renderGroups() {
 const adminModeSelect = document.getElementById('adminModeSelect');
 adminModeSelect.addEventListener('change', (e) => {
     adminActionMode = e.target.value;
-    adminModeSelect.classList.remove('mode-book', 'mode-paint');
+    adminModeSelect.classList.remove('mode-book', 'mode-paint', 'mode-manage');
     paintStart = null; document.querySelectorAll('.painting').forEach(el => el.classList.remove('painting'));
     
     if (adminActionMode === 'book') {
@@ -1265,6 +1326,10 @@ adminModeSelect.addEventListener('change', (e) => {
         adminModeSelect.classList.add('mode-paint');
         document.getElementById('paintPalette').style.display = 'flex';
         showToast('Выберите цвет и кликните по двум местам');
+    } else if (adminActionMode === 'manage') {
+        adminModeSelect.classList.add('mode-manage');
+        document.getElementById('paintPalette').style.display = 'none';
+        showToast('Режим: Управление бронями');
     } else {
         document.getElementById('paintPalette').style.display = 'none';
         showToast('Режим: Блокировка');
