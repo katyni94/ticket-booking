@@ -34,7 +34,6 @@
   .stage{ width:min(400px,80%); height:40px; border-radius:0 0 50% 50%; background:#2a3446; display:flex; align-items:center; justify-content:center; color:#8b97a8; font-weight:600; letter-spacing:2px; text-transform:uppercase; margin-bottom:30px; border-top:4px solid #1f2735; }
   .zone-title{font-size:11px; color:var(--muted); text-transform:uppercase; margin:15px 0 5px; font-weight:600; text-align:center}
   
-  /* ИСПРАВЛЕНИЕ: Зал снова по центру на ПК, но скроллится на мобилках */
   .hall-wrap {
     width: 100%; 
     max-width: 100%; 
@@ -42,12 +41,12 @@
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 20px;
-    text-align: center; /* Центрирует зал на ПК */
+    text-align: center;
   }
   
   .hall-layout { 
-    display: inline-flex; /* Позволяет скроллить на мобилках */
-    text-align: left; /* Возвращает текст обратно влево */
+    display: inline-flex; 
+    text-align: left;
     gap: 30px; 
     align-items: flex-start; 
     padding: 0 10px;
@@ -98,7 +97,6 @@
   #adminBtn:hover { opacity: 1; }
   body.admin-mode #adminBtn { display: none; }
 
-  /* БОКОВАЯ ПАНЕЛЬ АДМИНА */
   #adminSidebar {
     position: fixed; right: -400px; top: 0; bottom: 0; width: 380px;
     background: #171d27; border-left: 1px solid #2a3446; padding: 20px;
@@ -149,10 +147,24 @@
 
   #saveAllBtn { background: #22c55e; color: white; width: 100%; padding: 12px; font-size: 15px; margin-top: 15px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
   #saveAllBtn:hover { background: #16a34a; }
+
+  /* Оверлей загрузки */
+  #loadingOverlay {
+    position: fixed; inset: 0; background: rgba(15, 19, 25, 0.95);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 9999; transition: opacity 0.5s; opacity: 1; pointer-events: all;
+  }
+  #loadingOverlay.hidden { opacity: 0; pointer-events: none; }
+  .spinner {
+    width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.1);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 1s linear infinite; margin-bottom: 20px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 16px; color: var(--text); text-align: center; }
+  .loading-sub { font-size: 13px; color: var(--muted); margin-top: 10px; max-width: 300px; text-align: center; }
   
-  /* Мобильный зум и адаптация */
   @media (max-width: 768px) {
-    /* Увеличили отступ, чтобы шторка с 4 билетами не перекрывала цены */
     body { padding: 10px 5px 320px; }
     body.admin-mode { padding-right: 0; overflow: hidden; }
     body.admin-mode .bar { padding-right: 0; }
@@ -181,6 +193,13 @@
 </style>
 </head>
 <body>
+
+<!-- Оверлей загрузки -->
+<div id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Загрузка зала...</div>
+  <div class="loading-sub">Если сервер давно не посещали, он может «просыпаться» до 1 минуты. Пожалуйста, подождите.</div>
+</div>
 
 <h1>Концертный зал</h1>
 <div class="sub">25 ноября в 19:00</div>
@@ -445,14 +464,31 @@
   </div>
 </div>
 
-<!-- МОДАЛКА ПРИНУДИТЕЛЬНОЙ ОТМЕНЫ АДМИНОМ -->
+<!-- МОДАЛКА ДЕЙСТВИЙ АДМИНА С БРОНЬЮ -->
 <div class="modal" id="forceCancelModal" hidden>
   <div class="modal-card">
-    <h2>Снятие брони</h2>
+    <h2>Управление бронью</h2>
     <div id="forceCancelInfo" style="font-size:14px; margin-bottom:20px; line-height:1.6;"></div>
-    <div style="display:flex; gap:10px;">
-      <button type="button" class="btn ghost" style="flex:1" onclick="document.getElementById('forceCancelModal').hidden = true">Отмена</button>
-      <button type="button" class="btn primary" style="flex:1; background:#ef4444;" onclick="confirmForceCancel()">Да, снять</button>
+    
+    <!-- Блок редактирования (скрыт по умолчанию) -->
+    <div id="editFields" style="display:none; border-top: 1px solid #333; padding-top: 15px; margin-bottom: 20px;">
+       <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <label style="flex:1; font-size:13px; color:var(--muted);">Фамилия <input id="edit-lastname" type="text" style="margin-top:5px;"></label>
+        <label style="flex:1; font-size:13px; color:var(--muted);">Имя <input id="edit-firstname" type="text" style="margin-top:5px;"></label>
+      </div>
+      <label style="display:block; margin-bottom:10px; font-size:13px; color:var(--muted);">Телефон <input id="edit-phone" type="tel" style="margin-top:5px;" oninput="formatPhone(this)"></label>
+      <label style="display:block; margin-bottom:10px; font-size:13px; color:var(--muted);">Группа <input id="edit-group" type="text" style="margin-top:5px;"></label>
+      <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <label style="flex:1; font-size:13px; color:var(--muted);">Резерв (Фамилия) <input id="edit-res-lastname" type="text" style="margin-top:5px;"></label>
+        <label style="flex:1; font-size:13px; color:var(--muted);">Резерв (Имя) <input id="edit-res-firstname" type="text" style="margin-top:5px;"></label>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button type="button" class="btn ghost" style="flex:1" onclick="document.getElementById('forceCancelModal').hidden = true">Закрыть</button>
+      <button type="button" class="btn primary" id="editToggleBtn" style="flex:1; background:#eab308;" onclick="toggleEditMode()">✏️ Редактировать</button>
+      <button type="button" class="btn primary" id="saveEditBtn" style="flex:1; display:none; background:#22c55e;" onclick="saveEditedBooking()">💾 Сохранить</button>
+      <button type="button" class="btn primary" style="flex:1; background:#ef4444;" onclick="confirmForceCancel()">❌ Снять бронь</button>
     </div>
     <p class="error" id="forceCancelError"></p>
   </div>
@@ -787,7 +823,6 @@ function updateBasePrice(val) {
     render();
 }
 
-// ИСПРАВЛЕННАЯ ЛЕГЕНДА: Игнорируем серый цвет
 function renderLegend() {
   const legendDiv = document.getElementById('priceLegend');
   legendDiv.innerHTML = '';
@@ -795,7 +830,6 @@ function renderLegend() {
   let usedColors = new Set();
   
   document.querySelectorAll('.seat').forEach(seat => {
-      // Берем цвет только если место принадлежит активной стороне И это НЕ серый цвет
       if (seat.dataset.color && seat.dataset.side === currentEvent && seat.dataset.color !== '#2a3342') {
           usedColors.add(seat.dataset.color);
       }
@@ -808,7 +842,6 @@ function renderLegend() {
       items.push({ color: color, price: price });
   });
   
-  // Если вообще нет цветных мест, то показываем базовую цену
   if (items.length === 0) {
       items.push({ color: '#2a3342', price: priceSettings.basePrice || 600 });
   }
@@ -879,9 +912,24 @@ function previewBg() {
     updateBgPreview();
 }
 
+async function fetchWithRetry(url, options, retries = 3, delay = 2000) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const res = await fetch(url, options);
+            if (res.ok) return res;
+            // Если это 4xx ошибка, нет смысла повторять
+            if (res.status >= 400 && res.status < 500) return res;
+        } catch (e) {
+            console.log(`Попытка ${i+1} не удалась, ждем ${delay}мс...`);
+        }
+        await new Promise(r => setTimeout(r, delay));
+    }
+    throw new Error('Сетевая ошибка или таймаут');
+}
+
 async function loadSettings() {
   try {
-    const res = await fetch('/api/settings');
+    const res = await fetchWithRetry('/api/settings');
     priceSettings = await res.json();
     if (!priceSettings || Object.keys(priceSettings).length === 0) {
       priceSettings = { basePrice: 600, colorPrices: { '#FFC000': 600, '#FFFF00': 800, '#92D050': 1000, '#C55A11': 1100, '#00B0F0': 1300, '#B4A7D6': 1400, '#F4B183': 1500 }, rules: [], hidden: { left: false, right: false }, maxSeats: 4, bgUrl: '', bgSize: 'cover', bgPosX: 50, bgPosY: 50, restrictAdminSeats: true, groups: { left: [], right: [] } };
@@ -909,12 +957,16 @@ async function loadSettings() {
     }
     
     updateBgPreview(); renderGroups(); render();
-  } catch (e) { console.error('Ошибка загрузки настроек'); }
+    document.getElementById('loadingOverlay').classList.add('hidden');
+  } catch (e) { 
+    console.error('Ошибка загрузки настроек:', e); 
+    document.getElementById('loadingOverlay').classList.add('hidden'); // Скрываем, чтобы показать зал даже без настроек
+  }
 }
 
 async function loadBookings(){
   try {
-    const res = await fetch('/api/bookings', { cache: 'no-store' });
+    const res = await fetchWithRetry('/api/bookings', { cache: 'no-store' });
     const data = await res.json();
     bookedSet.clear();
     if (Array.isArray(data)) {
@@ -925,7 +977,11 @@ async function loadBookings(){
     }
     for (const k of [...selected]) if (bookedSet.has(k)) selected.delete(k);
     render();
-  } catch (e) { render(); }
+    document.getElementById('loadingOverlay').classList.add('hidden');
+  } catch (e) { 
+    render(); 
+    document.getElementById('loadingOverlay').classList.add('hidden');
+  }
 }
 
 document.body.addEventListener('click', async e => {
@@ -1023,6 +1079,9 @@ async function openForceCancelModal(seatKey) {
     currentForceCancelKey = seatKey;
     document.getElementById('forceCancelError').textContent = '';
     document.getElementById('forceCancelInfo').innerHTML = 'Загрузка данных...';
+    document.getElementById('editFields').style.display = 'none';
+    document.getElementById('editToggleBtn').style.display = 'block';
+    document.getElementById('saveEditBtn').style.display = 'none';
     document.getElementById('forceCancelModal').hidden = false;
 
     try {
@@ -1035,11 +1094,76 @@ async function openForceCancelModal(seatKey) {
         infoText += `<b>Телефон:</b> ${data.phone}<br>`;
         if (data.group_name) infoText += `<b>Группа:</b> ${data.group_name}<br>`;
         if (data.reserve_firstname && data.reserve_lastname) infoText += `<b>Резерв:</b> ${data.reserve_lastname} ${data.reserve_firstname}<br>`;
-        infoText += `<br><span style="color:#f87171;">Вы уверены, что хотите снять эту бронь?</span>`;
+        infoText += `<br><span style="color:#f87171;">Вы можете отредактировать данные или снять бронь.</span>`;
         
         document.getElementById('forceCancelInfo').innerHTML = infoText;
+
+        // Заполняем поля для редактирования
+        document.getElementById('edit-lastname').value = data.lastname || '';
+        document.getElementById('edit-firstname').value = data.firstname || '';
+        document.getElementById('edit-phone').value = data.phone || '';
+        document.getElementById('edit-group').value = data.group_name || '';
+        document.getElementById('edit-res-lastname').value = data.reserve_lastname || '';
+        document.getElementById('edit-res-firstname').value = data.reserve_firstname || '';
+
     } catch (e) {
         document.getElementById('forceCancelInfo').textContent = 'Не удалось загрузить данные брони.';
+    }
+}
+
+function toggleEditMode() {
+    const fields = document.getElementById('editFields');
+    const toggleBtn = document.getElementById('editToggleBtn');
+    const saveBtn = document.getElementById('saveEditBtn');
+
+    if (fields.style.display === 'none') {
+        fields.style.display = 'block';
+        toggleBtn.style.display = 'none';
+        saveBtn.style.display = 'block';
+    } else {
+        fields.style.display = 'none';
+        toggleBtn.style.display = 'block';
+        saveBtn.style.display = 'none';
+    }
+}
+
+async function saveEditedBooking() {
+    const errorEl = document.getElementById('forceCancelError');
+    errorEl.textContent = '';
+    
+    const lastname = document.getElementById('edit-lastname').value.trim();
+    const firstname = document.getElementById('edit-firstname').value.trim();
+    const phone = document.getElementById('edit-phone').value.trim();
+    const group = document.getElementById('edit-group').value.trim();
+    const resLast = document.getElementById('edit-res-lastname').value.trim();
+    const resFirst = document.getElementById('edit-res-firstname').value.trim();
+
+    if (lastname.length < 2) { errorEl.textContent = 'Введите фамилию'; return; }
+    if (firstname.length < 2) { errorEl.textContent = 'Введите имя'; return; }
+    if (phone.replace(/\D/g,'').length < 11) { errorEl.textContent = 'Введите корректный телефон'; return; }
+
+    try {
+        const res = await fetch(`/api/admin/edit-booking?pass=${ADMIN_PASSWORD}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                seat: currentForceCancelKey, 
+                firstname, lastname, phone, 
+                group_name: group, 
+                reserve_firstname: resFirst, 
+                reserve_lastname: resLast 
+            })
+        });
+        if (res.ok) {
+            document.getElementById('forceCancelModal').hidden = true;
+            loadBookings();
+            showToast('Данные брони обновлены!');
+        } else {
+            const d = await res.json();
+            errorEl.textContent = 'Ошибка: ' + (d.error || 'Неизвестно');
+        }
+    } catch (e) {
+        errorEl.textContent = 'Ошибка сети';
     }
 }
 
