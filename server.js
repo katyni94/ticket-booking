@@ -5,7 +5,7 @@ const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ADMIN_PASSWORD = "admin123"; 
+const ADMIN_PASSWORD = "admin123";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -26,6 +26,11 @@ let appSettings = {
   groups: { left: [], right: [] }
 };
 
+// Хелпер: оставить только цифры, последние 10 (для сравнения телефонов)
+function normPhone(p) {
+  return String(p || '').replace(/\D/g, '').slice(-10);
+}
+
 async function initDB() {
   try {
     await pool.query(`
@@ -38,9 +43,11 @@ async function initDB() {
         reserve_lastname VARCHAR(50),
         group_name VARCHAR(100),
         status VARCHAR(20) DEFAULT 'booked',
+        is_admin_booking BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    // Миграции для существующих БД
     await pool.query(`ALTER TABLE bookings ALTER COLUMN seat_key TYPE VARCHAR(50);`).catch(()=>{});
     await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS firstname VARCHAR(50);`).catch(()=>{});
     await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS lastname VARCHAR(50);`).catch(()=>{});
@@ -48,6 +55,7 @@ async function initDB() {
     await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reserve_lastname VARCHAR(50);`).catch(()=>{});
     await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS group_name VARCHAR(100);`).catch(()=>{});
     await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'booked';`).catch(()=>{});
+    await pool.query(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS is_admin_booking BOOLEAN DEFAULT false;`).catch(()=>{});
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS settings (
@@ -86,32 +94,51 @@ app.get('/api/bookings', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
+// Оставлен для совместимости, но основной UI теперь использует /api/admin/person-summary
 app.get('/api/limit', async (req, res) => {
-  const { firstname, lastname } = req.query;
+  const { firstname, lastname, phone } = req.query;
   if (!firstname || !lastname) return res.status(400).json({ error: 'Имя и фамилия обязательны' });
+  const normP = normPhone(phone);
   try {
     const { rows } = await pool.query(
-      `SELECT COUNT(*) as count FROM bookings 
-       WHERE ((LOWER(firstname) = LOWER($1) AND LOWER(lastname) = LOWER($2)) 
-          OR (LOWER(reserve_firstname) = LOWER($1) AND LOWER(reserve_lastname) = LOWER($2))) 
-       AND status = 'booked'`,
-      [firstname.trim(), lastname.trim()]
+      `SELECT COUNT(*) as count FROM bookings
+       WHERE (
+         (LOWER(firstname) = LOWER($1) AND LOWER(lastname) = LOWER($2)
+          ${normP ? `AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $3` : ''})
+         OR (LOWER(reserve_firstname) = LOWER($1) AND LOWER(reserve_lastname) = LOWER($2))
+       )
+       AND status = 'booked'
+       AND COALESCE(is_admin_booking, false) = false`,
+      normP ? [firstname.trim(), lastname.trim(), normP] : [firstname.trim(), lastname.trim()]
     );
     const used = parseInt(rows[0].count, 10);
     res.json({ used, max: appSettings.maxSeats, left: Math.max(0, appSettings.maxSeats - used) });
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
+// ========================================================================
+// БРОНИРОВАНИЕ (основной эндпоинт)
+// ========================================================================
 app.post('/api/bookings', async (req, res) => {
-  const { seats, firstname, lastname, phone, reserveFirstname, reserveLastname, groupName, adminPass } = req.body || {};
+  const {
+    seats, firstname, lastname, phone,
+    reserveFirstname, reserveLastname, groupName,
+    adminPass, ignoreLimit
+  } = req.body || {};
+
   if (!Array.isArray(seats) || seats.length === 0) return res.status(400).json({ error: 'Не выбраны места' });
-  
-  const digits = String(phone || '').replace(/\D/g, '');
+
+  const digits = normPhone(phone);
   if (!firstname || firstname.trim().length < 2) return res.status(400).json({ error: 'Введите имя' });
   if (!lastname || lastname.trim().length < 2) return res.status(400).json({ error: 'Введите фамилию' });
   if (digits.length < 10) return res.status(400).json({ error: 'Введите корректный телефон' });
 
-  const isAdminOverride = (adminPass === ADMIN_PASSWORD);
+  const isAdmin = (adminPass === ADMIN_PASSWORD);
+  // Если админ — решает чекбокс ignoreLimit (true = не расходовать лимит).
+  // Если клиент — всегда использует свой лимит.
+  const useLimit = isAdmin ? (ignoreLimit !== true) : true;
+  const isAdminBooking = isAdmin && !useLimit;
+
   const fName = firstname.trim();
   const lName = lastname.trim();
   const rFName = reserveFirstname ? reserveFirstname.trim() : null;
@@ -120,82 +147,175 @@ app.post('/api/bookings', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows: existing } = await client.query('SELECT seat_key FROM bookings WHERE seat_key = ANY($1) FOR UPDATE', [seats]);
+
+    // 1) Проверка занятости мест
+    const { rows: existing } = await client.query(
+      'SELECT seat_key FROM bookings WHERE seat_key = ANY($1) FOR UPDATE',
+      [seats]
+    );
     if (existing.length > 0) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Эти места уже выбрал кто-то другой 🥲. Обновите страницу.' });
+      return res.status(409).json({
+        error: 'Эти места уже выбрал кто-то другой 🥲. Обновите страницу.',
+        code: 'SEATS_TAKEN'
+      });
     }
 
-    if (!isAdminOverride) {
+    // 2) Проверка лимита (если используем)
+    if (useLimit) {
       const { rows: userRows } = await client.query(
-        `SELECT COUNT(*) as count FROM bookings 
-         WHERE ((LOWER(firstname) = LOWER($1) AND LOWER(lastname) = LOWER($2)) 
-            OR (LOWER(reserve_firstname) = LOWER($1) AND LOWER(reserve_lastname) = LOWER($2))) 
-         AND status = 'booked'`, [fName, lName]
+        `SELECT COUNT(*) as count FROM bookings
+         WHERE (
+           (LOWER(firstname) = LOWER($1) AND LOWER(lastname) = LOWER($2)
+            AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $3)
+           OR (LOWER(reserve_firstname) = LOWER($1) AND LOWER(reserve_lastname) = LOWER($2))
+         )
+         AND status = 'booked'
+         AND COALESCE(is_admin_booking, false) = false`,
+        [fName, lName, digits]
       );
       const userUsed = parseInt(userRows[0].count, 10);
-      if (userUsed + seats.length > appSettings.maxSeats) {
+      const max = appSettings.maxSeats;
+      if (userUsed + seats.length > max) {
         await client.query('ROLLBACK');
-        return res.status(409).json({ error: `У вас уже занято ${userUsed} мест из ${appSettings.maxSeats}.` });
+        const left = Math.max(0, max - userUsed);
+        let msg;
+        if (userUsed >= max) {
+          msg = `У вас уже забронировано ${userUsed} из ${max} мест (лимит исчерпан). Снимите лишние места или обратитесь к администратору.`;
+        } else {
+          msg = `У вас уже ${userUsed} мест из ${max}. Можно добавить ещё не более ${left} (выбрано ${seats.length}).`;
+        }
+        return res.status(409).json({ error: msg, code: 'LIMIT_EXCEEDED', used: userUsed, max, left });
       }
 
+      // Резерв — проверка по имени (без телефона, т.к. в интерфейсе его нет)
       if (rFName && rLName) {
         const { rows: resRows } = await client.query(
-          `SELECT COUNT(*) as count FROM bookings 
-           WHERE ((LOWER(firstname) = LOWER($1) AND LOWER(lastname) = LOWER($2)) 
-              OR (LOWER(reserve_firstname) = LOWER($1) AND LOWER(reserve_lastname) = LOWER($2))) 
-           AND status = 'booked'`, [rFName, rLName]
+          `SELECT COUNT(*) as count FROM bookings
+           WHERE (
+             (LOWER(firstname) = LOWER($1) AND LOWER(lastname) = LOWER($2))
+             OR (LOWER(reserve_firstname) = LOWER($1) AND LOWER(reserve_lastname) = LOWER($2))
+           )
+           AND status = 'booked'
+           AND COALESCE(is_admin_booking, false) = false`,
+          [rFName, rLName]
         );
         const resUsed = parseInt(resRows[0].count, 10);
-        if (resUsed + seats.length > appSettings.maxSeats) {
+        if (resUsed + seats.length > max) {
           await client.query('ROLLBACK');
-          return res.status(409).json({ error: `У ${rFName} ${rLName} уже занято ${resUsed} мест из ${appSettings.maxSeats}. Резерв исчерпан.` });
+          return res.status(409).json({
+            error: `У ${rFName} ${rLName} уже занято ${resUsed} мест из ${max}. Резерв исчерпан.`,
+            code: 'LIMIT_EXCEEDED'
+          });
         }
       }
     }
 
+    // 3) Вставка
     for (const seat of seats) {
       await client.query(
-        "INSERT INTO bookings (seat_key, firstname, lastname, phone, reserve_firstname, reserve_lastname, group_name, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'booked')", 
-        [seat, fName, lName, phone.trim(), rFName, rLName, groupName || '']
+        `INSERT INTO bookings
+           (seat_key, firstname, lastname, phone, reserve_firstname, reserve_lastname, group_name, status, is_admin_booking)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'booked', $8)`,
+        [seat, fName, lName, phone.trim(), rFName, rLName, groupName || '', isAdminBooking]
       );
     }
     await client.query('COMMIT');
     const { rows: all } = await client.query("SELECT seat_key, status FROM bookings");
-    res.json({ ok: true, booked: all });
+    res.json({ ok: true, booked: all, adminBooking: isAdminBooking });
   } catch (err) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: 'Ошибка при бронировании: ' + err.message });
   } finally { client.release(); }
 });
 
+// ========================================================================
+// МОИ БИЛЕТЫ (теперь с телефоном)
+// ========================================================================
 app.get('/api/my-tickets', async (req, res) => {
-  const { firstname, lastname } = req.query;
+  const { firstname, lastname, phone } = req.query;
   if (!firstname || !lastname) return res.status(400).json({ error: 'Введите имя и фамилию' });
+  const digits = normPhone(phone);
+  if (digits.length < 10) return res.status(400).json({ error: 'Введите корректный телефон' });
   try {
     const { rows } = await pool.query(`
-      SELECT seat_key, firstname, lastname, phone, reserve_firstname, reserve_lastname, status 
-      FROM bookings 
-      WHERE (LOWER(firstname) = LOWER($1) AND LOWER(lastname) = LOWER($2))
-         OR (LOWER(reserve_firstname) = LOWER($1) AND LOWER(reserve_lastname) = LOWER($2))
+      SELECT seat_key, firstname, lastname, phone, reserve_firstname, reserve_lastname, status, is_admin_booking
+      FROM bookings
+      WHERE (
+        (LOWER(firstname) = LOWER($1) AND LOWER(lastname) = LOWER($2)
+         AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $3)
+        OR (LOWER(reserve_firstname) = LOWER($1) AND LOWER(reserve_lastname) = LOWER($2))
+      )
       AND status = 'booked'
-    `, [firstname.trim(), lastname.trim()]);
+      ORDER BY seat_key
+    `, [firstname.trim(), lastname.trim(), digits]);
     res.json(rows);
   } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
 });
 
+// ========================================================================
+// ОТМЕНА (только своих — по имени+фамилии+телефону)
+// ========================================================================
 app.post('/api/cancel', async (req, res) => {
-  const { seats, firstname, lastname } = req.body;
+  const { seats, firstname, lastname, phone } = req.body || {};
   if (!seats || !seats.length) return res.status(400).json({ error: 'Не выбраны места' });
+  const digits = normPhone(phone);
+  if (!firstname || !lastname || digits.length < 10) {
+    return res.status(400).json({ error: 'Введите имя, фамилию и телефон' });
+  }
   try {
-    await pool.query(
-      "DELETE FROM bookings WHERE seat_key = ANY($1) AND LOWER(firstname) = LOWER($2) AND LOWER(lastname) = LOWER($3) AND status = 'booked'", 
-      [seats, firstname.trim(), lastname.trim()]
+    const result = await pool.query(
+      `DELETE FROM bookings
+       WHERE seat_key = ANY($1)
+         AND LOWER(firstname) = LOWER($2)
+         AND LOWER(lastname) = LOWER($3)
+         AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $4
+         AND status = 'booked'`,
+      [seats, firstname.trim(), lastname.trim(), digits]
     );
-    res.json({ ok: true });
+    res.json({ ok: true, deleted: result.rowCount });
   } catch (err) { res.status(500).json({ error: 'Ошибка при отмене' }); }
 });
 
+// ========================================================================
+// АДМИН: сводка по человеку (для информационной плашки в форме брони)
+// ========================================================================
+app.get('/api/admin/person-summary', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
+  const { firstname, lastname, phone } = req.query;
+  if (!firstname || !lastname) return res.status(400).json({ error: 'Имя и фамилия обязательны' });
+  const digits = normPhone(phone);
+  try {
+    const baseWhere = `
+      WHERE (
+        (LOWER(firstname) = LOWER($1) AND LOWER(lastname) = LOWER($2)
+         ${digits ? `AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $3` : ''})
+        OR (LOWER(reserve_firstname) = LOWER($1) AND LOWER(reserve_lastname) = LOWER($2))
+      )
+      AND status = 'booked'`;
+    const params = digits ? [firstname.trim(), lastname.trim(), digits] : [firstname.trim(), lastname.trim()];
+
+    const totalQ = await pool.query(`SELECT COUNT(*) as c FROM bookings ${baseWhere}`, params);
+    const limitedQ = await pool.query(
+      `SELECT COUNT(*) as c FROM bookings ${baseWhere} AND COALESCE(is_admin_booking, false) = false`,
+      params
+    );
+
+    const total = parseInt(totalQ.rows[0].c, 10);
+    const limited = parseInt(limitedQ.rows[0].c, 10);
+    const admin = total - limited;
+
+    res.json({
+      total, limited, admin,
+      max: appSettings.maxSeats,
+      left: Math.max(0, appSettings.maxSeats - limited)
+    });
+  } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
+});
+
+// ========================================================================
+// АДМИН: остальные эндпоинты
+// ========================================================================
 app.post('/api/admin/toggle-block', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
   const { seat } = req.body;
@@ -209,7 +329,10 @@ app.post('/api/admin/toggle-block', async (req, res) => {
         return res.status(400).json({ error: 'Место уже забронировано' });
       }
     } else {
-      await pool.query("INSERT INTO bookings (seat_key, firstname, phone, status) VALUES ($1, 'Админ', 'Заблокировано', 'blocked')", [seat]);
+      await pool.query(
+        "INSERT INTO bookings (seat_key, firstname, phone, status) VALUES ($1, 'Админ', 'Заблокировано', 'blocked')",
+        [seat]
+      );
       return res.json({ status: 'blocked' });
     }
   } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
@@ -232,46 +355,47 @@ app.post('/api/admin/force-cancel', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
-// НОВЫЙ ЭНДПОИНТ: РЕДАКТИРОВАНИЕ ОДНОЙ БРОНИ
 app.post('/api/admin/edit-booking', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
-  const { seat, firstname, lastname, phone, group_name, reserve_firstname, reserve_lastname } = req.body;
+  const { seat, firstname, lastname, phone, group_name, reserve_firstname, reserve_lastname, is_admin_booking } = req.body;
   try {
     await pool.query(
-      "UPDATE bookings SET firstname=$1, lastname=$2, phone=$3, group_name=$4, reserve_firstname=$5, reserve_lastname=$6 WHERE seat_key=$7",
-      [firstname, lastname, phone, group_name, reserve_firstname, reserve_lastname, seat]
+      `UPDATE bookings
+       SET firstname=$1, lastname=$2, phone=$3, group_name=$4,
+           reserve_firstname=$5, reserve_lastname=$6,
+           is_admin_booking = COALESCE($7, is_admin_booking)
+       WHERE seat_key=$8`,
+      [firstname, lastname, phone, group_name, reserve_firstname, reserve_lastname,
+       (typeof is_admin_booking === 'boolean' ? is_admin_booking : null), seat]
     );
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
 });
 
-// НОВЫЙ ЭНДПОИНТ: МАССОВОЕ РЕДАКТИРОВАНИЕ
 app.post('/api/admin/bulk-edit', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
   const { oldPhone, newFirstname, newLastname, newPhone } = req.body;
-  
   if (!oldPhone || !newFirstname || !newLastname || !newPhone) {
-      return res.status(400).json({ error: 'Заполните все поля' });
+    return res.status(400).json({ error: 'Заполните все поля' });
   }
-
   try {
     const normOldPhone = oldPhone.replace(/\D/g, '').slice(-10);
-    
-    // Обновляем все места, где телефон совпадает с искомым
     const query = `
-      UPDATE bookings 
-      SET firstname = $1, lastname = $2, phone = $3 
-      WHERE RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $4 AND status = 'booked'
+      UPDATE bookings
+      SET firstname = $1, lastname = $2, phone = $3
+      WHERE RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $4
+        AND status = 'booked'
     `;
     const result = await pool.query(query, [newFirstname, newLastname, newPhone, normOldPhone]);
-    
     res.json({ ok: true, updated: result.rowCount });
-  } catch (err) { 
-    res.status(500).json({ error: 'Ошибка БД: ' + err.message }); 
+  } catch (err) {
+    res.status(500).json({ error: 'Ошибка БД: ' + err.message });
   }
 });
 
-// ЭКСПОРТ В EXCEL
+// ========================================================================
+// ЭКСПОРТ EXCEL (добавлена колонка «Админ»)
+// ========================================================================
 app.get('/api/admin/export', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   try {
@@ -279,20 +403,18 @@ app.get('/api/admin/export', async (req, res) => {
 
     const getPrice = (key) => {
       let zone = ''; let row = 0, seat = 0;
-      if (key.startsWith('parterre-')) { zone = 'parterre'; const parts = key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
-      else if (key.startsWith('central-')) { zone = 'central'; const parts = key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
-      else if (key.startsWith('balc-left-a-')) { zone = 'balc-left-a'; const parts = key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
-      else if (key.startsWith('balc-left-b-')) { zone = 'balc-left-b'; const parts = key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
-      else if (key.startsWith('balc-right-a-')) { zone = 'balc-right-a'; const parts = key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
-      else if (key.startsWith('balc-right-b-')) { zone = 'balc-right-b'; const parts = key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
-      
+      if (key.startsWith('parterre-')) { zone = 'parterre'; const p = key.split('-'); row = +p[1]; seat = +p[2]; }
+      else if (key.startsWith('central-')) { zone = 'central'; const p = key.split('-'); row = +p[1]; seat = +p[2]; }
+      else if (key.startsWith('balc-left-a-')) { zone = 'balc-left-a'; const p = key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (key.startsWith('balc-left-b-')) { zone = 'balc-left-b'; const p = key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (key.startsWith('balc-right-a-')) { zone = 'balc-right-a'; const p = key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (key.startsWith('balc-right-b-')) { zone = 'balc-right-b'; const p = key.split('-'); row = +p[3]; seat = +p[4]; }
       if (appSettings.rules) {
         for (let i = appSettings.rules.length - 1; i >= 0; i--) {
-          let r = appSettings.rules[i];
+          const r = appSettings.rules[i];
           if (r.zone === zone && row == r.row && seat >= r.start && seat <= r.end) {
-            if (r.color && appSettings.colorPrices && appSettings.colorPrices[r.color] !== undefined) {
-                return appSettings.colorPrices[r.color];
-            }
+            if (r.color && appSettings.colorPrices && appSettings.colorPrices[r.color] !== undefined)
+              return appSettings.colorPrices[r.color];
             return r.price || appSettings.basePrice || 600;
           }
         }
@@ -306,38 +428,44 @@ app.get('/api/admin/export', async (req, res) => {
       { header: 'Зона', key: 'zone', width: 20 }, { header: 'Ряд', key: 'row', width: 10 },
       { header: 'Место', key: 'seat', width: 10 }, { header: 'Фамилия', key: 'lastname', width: 20 },
       { header: 'Имя', key: 'firstname', width: 20 }, { header: 'Телефон', key: 'phone', width: 20 },
-      { header: 'Резерв на (Фамилия Имя)', key: 'reserve', width: 25 }, { header: 'Группа', key: 'group', width: 20 }, { header: 'Сумма', key: 'price', width: 15 }
+      { header: 'Резерв на (Фамилия Имя)', key: 'reserve', width: 25 }, { header: 'Группа', key: 'group', width: 20 },
+      { header: 'Админ', key: 'admin', width: 10 }, { header: 'Сумма', key: 'price', width: 15 }
     ];
     const sheet2 = workbook.addWorksheet('Сводка');
     sheet2.columns = [
       { header: 'Фамилия', key: 'lastname', width: 20 }, { header: 'Имя', key: 'firstname', width: 20 },
-      { header: 'Телефон', key: 'phone', width: 20 }, { header: 'Группа', key: 'group', width: 20 }, 
-      { header: 'Кол-во мест', key: 'count', width: 15 }, { header: 'Итого сумма', key: 'total', width: 15 }
+      { header: 'Телефон', key: 'phone', width: 20 }, { header: 'Группа', key: 'group', width: 20 },
+      { header: 'Всего мест', key: 'count', width: 15 }, { header: 'Из них админских', key: 'adminCount', width: 15 },
+      { header: 'Итого сумма', key: 'total', width: 15 }
     ];
 
     const summaryMap = {};
     booked.forEach(b => {
       let zoneName = 'Балкон'; let row = 0, seat = 0;
-      if (b.seat_key.startsWith('parterre-')) { zoneName = 'Партер'; const parts = b.seat_key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
-      else if (b.seat_key.startsWith('central-')) { zoneName = 'Центр. балкон'; const parts = b.seat_key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
-      else if (b.seat_key.startsWith('balc-left-a-')) { zoneName = 'Левый балкон А'; const parts = b.seat_key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
-      else if (b.seat_key.startsWith('balc-left-b-')) { zoneName = 'Левый балкон Б'; const parts = b.seat_key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
-      else if (b.seat_key.startsWith('balc-right-a-')) { zoneName = 'Правый балкон А'; const parts = b.seat_key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
-      else if (b.seat_key.startsWith('balc-right-b-')) { zoneName = 'Правый балкон Б'; const parts = b.seat_key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
+      if (b.seat_key.startsWith('parterre-')) { zoneName = 'Партер'; const p = b.seat_key.split('-'); row = +p[1]; seat = +p[2]; }
+      else if (b.seat_key.startsWith('central-')) { zoneName = 'Центр. балкон'; const p = b.seat_key.split('-'); row = +p[1]; seat = +p[2]; }
+      else if (b.seat_key.startsWith('balc-left-a-')) { zoneName = 'Левый балкон А'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (b.seat_key.startsWith('balc-left-b-')) { zoneName = 'Левый балкон Б'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (b.seat_key.startsWith('balc-right-a-')) { zoneName = 'Правый балкон А'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (b.seat_key.startsWith('balc-right-b-')) { zoneName = 'Правый балкон Б'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
 
       const price = getPrice(b.seat_key);
-      
       const reserveStr = (b.reserve_lastname && b.reserve_firstname) ? `${b.reserve_lastname} ${b.reserve_firstname}` : '';
-      sheet1.addRow({ zone: zoneName, row: row, seat: seat, lastname: b.lastname, firstname: b.firstname, phone: b.phone, reserve: reserveStr, group: b.group_name || '', price: price });
+      sheet1.addRow({
+        zone: zoneName, row, seat, lastname: b.lastname, firstname: b.firstname,
+        phone: b.phone, reserve: reserveStr, group: b.group_name || '',
+        admin: b.is_admin_booking ? 'да' : '', price
+      });
 
-      const personKey = `${b.lastname}_${b.firstname}_${b.phone}`;
-      if (!summaryMap[personKey]) {
-          summaryMap[personKey] = { lastname: b.lastname, firstname: b.firstname, phone: b.phone, group: b.group_name || '', count: 0, total: 0 };
-      }
-      summaryMap[personKey].count++;
-      summaryMap[personKey].total += price;
+      const key = `${b.lastname}_${b.firstname}_${b.phone}`;
+      if (!summaryMap[key]) summaryMap[key] = {
+        lastname: b.lastname, firstname: b.firstname, phone: b.phone,
+        group: b.group_name || '', count: 0, adminCount: 0, total: 0
+      };
+      summaryMap[key].count++;
+      if (b.is_admin_booking) summaryMap[key].adminCount++;
+      summaryMap[key].total += price;
     });
-
     Object.values(summaryMap).forEach(p => sheet2.addRow(p));
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -347,7 +475,9 @@ app.get('/api/admin/export', async (req, res) => {
   } catch (err) { res.status(500).send('Ошибка экспорта: ' + err.message); }
 });
 
-// ЭКСПОРТ В WORD (HTML-формат)
+// ========================================================================
+// ЭКСПОРТ WORD (добавлена колонка «Админ»)
+// ========================================================================
 app.get('/api/admin/export-word', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   try {
@@ -355,17 +485,15 @@ app.get('/api/admin/export-word', async (req, res) => {
 
     const getPrice = (key) => {
       let zone = ''; let row = 0, seat = 0;
-      if (key.startsWith('parterre-')) { zone = 'parterre'; const parts = key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
-      else if (key.startsWith('central-')) { zone = 'central'; const parts = key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
-      else if (key.startsWith('balc-')) { const parts = key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
-      
+      if (key.startsWith('parterre-')) { zone = 'parterre'; const p = key.split('-'); row = +p[1]; seat = +p[2]; }
+      else if (key.startsWith('central-')) { zone = 'central'; const p = key.split('-'); row = +p[1]; seat = +p[2]; }
+      else if (key.startsWith('balc-')) { const p = key.split('-'); row = +p[3]; seat = +p[4]; }
       if (appSettings.rules) {
         for (let i = appSettings.rules.length - 1; i >= 0; i--) {
-          let r = appSettings.rules[i];
+          const r = appSettings.rules[i];
           if (r.zone === zone && row == r.row && seat >= r.start && seat <= r.end) {
-            if (r.color && appSettings.colorPrices && appSettings.colorPrices[r.color] !== undefined) {
-                return appSettings.colorPrices[r.color];
-            }
+            if (r.color && appSettings.colorPrices && appSettings.colorPrices[r.color] !== undefined)
+              return appSettings.colorPrices[r.color];
             return r.price || appSettings.basePrice || 600;
           }
         }
@@ -381,41 +509,40 @@ app.get('/api/admin/export-word', async (req, res) => {
       th, td { border: 1px solid #000; padding: 5px; text-align: left; }
       th { background-color: #f0f0f0; font-weight: bold; }
       h1 { font-size: 16pt; }
-    </style>
-    </head><body>`;
+    </style></head><body>`;
 
     html += `<h1>Список проданных билетов</h1>`;
-    html += `<table><tr><th>Зона</th><th>Ряд</th><th>Место</th><th>Фамилия</th><th>Имя</th><th>Телефон</th><th>Резерв</th><th>Группа</th><th>Сумма</th></tr>`;
+    html += `<table><tr><th>Зона</th><th>Ряд</th><th>Место</th><th>Фамилия</th><th>Имя</th><th>Телефон</th><th>Резерв</th><th>Группа</th><th>Админ</th><th>Сумма</th></tr>`;
 
     const summaryMap = {};
-
     booked.forEach(b => {
       let zoneName = 'Балкон'; let row = 0, seat = 0;
-      if (b.seat_key.startsWith('parterre-')) { zoneName = 'Партер'; const parts = b.seat_key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
-      else if (b.seat_key.startsWith('central-')) { zoneName = 'Центр. балкон'; const parts = b.seat_key.split('-'); row = parseInt(parts[1]); seat = parseInt(parts[2]); }
-      else if (b.seat_key.startsWith('balc-left-a-')) { zoneName = 'Левый балкон А'; const parts = b.seat_key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
-      else if (b.seat_key.startsWith('balc-left-b-')) { zoneName = 'Левый балкон Б'; const parts = b.seat_key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
-      else if (b.seat_key.startsWith('balc-right-a-')) { zoneName = 'Правый балкон А'; const parts = b.seat_key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
-      else if (b.seat_key.startsWith('balc-right-b-')) { zoneName = 'Правый балкон Б'; const parts = b.seat_key.split('-'); row = parseInt(parts[3]); seat = parseInt(parts[4]); }
+      if (b.seat_key.startsWith('parterre-')) { zoneName = 'Партер'; const p = b.seat_key.split('-'); row = +p[1]; seat = +p[2]; }
+      else if (b.seat_key.startsWith('central-')) { zoneName = 'Центр. балкон'; const p = b.seat_key.split('-'); row = +p[1]; seat = +p[2]; }
+      else if (b.seat_key.startsWith('balc-left-a-')) { zoneName = 'Левый балкон А'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (b.seat_key.startsWith('balc-left-b-')) { zoneName = 'Левый балкон Б'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (b.seat_key.startsWith('balc-right-a-')) { zoneName = 'Правый балкон А'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (b.seat_key.startsWith('balc-right-b-')) { zoneName = 'Правый балкон Б'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
 
       const price = getPrice(b.seat_key);
       const reserveStr = (b.reserve_lastname && b.reserve_firstname) ? `${b.reserve_lastname} ${b.reserve_firstname}` : '';
+      html += `<tr><td>${zoneName}</td><td>${row}</td><td>${seat}</td><td>${b.lastname}</td><td>${b.firstname}</td><td>${b.phone}</td><td>${reserveStr}</td><td>${b.group_name || ''}</td><td>${b.is_admin_booking ? 'да' : ''}</td><td>${price} ₽</td></tr>`;
 
-      html += `<tr><td>${zoneName}</td><td>${row}</td><td>${seat}</td><td>${b.lastname}</td><td>${b.firstname}</td><td>${b.phone}</td><td>${reserveStr}</td><td>${b.group_name || ''}</td><td>${price} ₽</td></tr>`;
-
-      const personKey = `${b.lastname}_${b.firstname}_${b.phone}`;
-      if (!summaryMap[personKey]) {
-          summaryMap[personKey] = { lastname: b.lastname, firstname: b.firstname, phone: b.phone, group: b.group_name || '', count: 0, total: 0 };
-      }
-      summaryMap[personKey].count++;
-      summaryMap[personKey].total += price;
+      const key = `${b.lastname}_${b.firstname}_${b.phone}`;
+      if (!summaryMap[key]) summaryMap[key] = {
+        lastname: b.lastname, firstname: b.firstname, phone: b.phone,
+        group: b.group_name || '', count: 0, adminCount: 0, total: 0
+      };
+      summaryMap[key].count++;
+      if (b.is_admin_booking) summaryMap[key].adminCount++;
+      summaryMap[key].total += price;
     });
     html += `</table>`;
 
     html += `<h1>Сводка по покупателям</h1>`;
-    html += `<table><tr><th>Фамилия</th><th>Имя</th><th>Телефон</th><th>Группа</th><th>Кол-во мест</th><th>Итого сумма</th></tr>`;
+    html += `<table><tr><th>Фамилия</th><th>Имя</th><th>Телефон</th><th>Группа</th><th>Всего мест</th><th>Из них админских</th><th>Итого сумма</th></tr>`;
     Object.values(summaryMap).forEach(p => {
-      html += `<tr><td>${p.lastname}</td><td>${p.firstname}</td><td>${p.phone}</td><td>${p.group}</td><td>${p.count}</td><td>${p.total} ₽</td></tr>`;
+      html += `<tr><td>${p.lastname}</td><td>${p.firstname}</td><td>${p.phone}</td><td>${p.group}</td><td>${p.count}</td><td>${p.adminCount}</td><td>${p.total} ₽</td></tr>`;
     });
     html += `</table></body></html>`;
 
