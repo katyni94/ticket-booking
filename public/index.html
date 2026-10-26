@@ -777,6 +777,7 @@ function updateBasePrice(val) {
     render();
 }
 
+// ИСПРАВЛЕННАЯ ЛЕГЕНДА: собирает цвета только для активной стороны
 function renderLegend() {
   const legendDiv = document.getElementById('priceLegend');
   legendDiv.innerHTML = '';
@@ -784,7 +785,8 @@ function renderLegend() {
   let usedColors = new Set();
   
   document.querySelectorAll('.seat').forEach(seat => {
-      if (seat.dataset.color) {
+      // Берем цвет только если место принадлежит текущей активной стороне
+      if (seat.dataset.color && seat.dataset.side === currentEvent) {
           usedColors.add(seat.dataset.color);
       }
   });
