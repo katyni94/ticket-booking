@@ -232,7 +232,7 @@ app.post('/api/admin/force-cancel', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
-// НОВЫЙ ЭНДПОИНТ: РЕДАКТИРОВАНИЕ БРОНИ
+// НОВЫЙ ЭНДПОИНТ: РЕДАКТИРОВАНИЕ ОДНОЙ БРОНИ
 app.post('/api/admin/edit-booking', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
   const { seat, firstname, lastname, phone, group_name, reserve_firstname, reserve_lastname } = req.body;
@@ -243,6 +243,32 @@ app.post('/api/admin/edit-booking', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
+});
+
+// НОВЫЙ ЭНДПОИНТ: МАССОВОЕ РЕДАКТИРОВАНИЕ
+app.post('/api/admin/bulk-edit', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
+  const { oldPhone, newFirstname, newLastname, newPhone } = req.body;
+  
+  if (!oldPhone || !newFirstname || !newLastname || !newPhone) {
+      return res.status(400).json({ error: 'Заполните все поля' });
+  }
+
+  try {
+    const normOldPhone = oldPhone.replace(/\D/g, '').slice(-10);
+    
+    // Обновляем все места, где телефон совпадает с искомым
+    const query = `
+      UPDATE bookings 
+      SET firstname = $1, lastname = $2, phone = $3 
+      WHERE RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $4 AND status = 'booked'
+    `;
+    const result = await pool.query(query, [newFirstname, newLastname, newPhone, normOldPhone]);
+    
+    res.json({ ok: true, updated: result.rowCount });
+  } catch (err) { 
+    res.status(500).json({ error: 'Ошибка БД: ' + err.message }); 
+  }
 });
 
 // ЭКСПОРТ В EXCEL
