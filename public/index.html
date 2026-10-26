@@ -34,14 +34,23 @@
   .stage{ width:min(400px,80%); height:40px; border-radius:0 0 50% 50%; background:#2a3446; display:flex; align-items:center; justify-content:center; color:#8b97a8; font-weight:600; letter-spacing:2px; text-transform:uppercase; margin-bottom:30px; border-top:4px solid #1f2735; }
   .zone-title{font-size:11px; color:var(--muted); text-transform:uppercase; margin:15px 0 5px; font-weight:600; text-align:center}
   
-  .hall-wrap{
-    width:100%; max-width:100%; overflow-x:auto; padding-bottom:20px; display:flex; justify-content:center;
+  /* Исправлен скролл для Android */
+  .hall-wrap {
+    width: 100%; 
+    max-width: 100vw; 
+    overflow-x: auto; 
+    overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
-    transition: all 0.3s ease;
+    display: block; /* Важно для Android */
+    padding-bottom: 20px;
   }
   
-  .hall-layout { display: flex; justify-content: flex-start; gap: 30px; align-items: flex-start; min-width: max-content;}
-  @media (min-width: 1024px) { .hall-layout { justify-content: center; } }
+  .hall-layout { 
+    display: inline-flex; /* Важно для Android */
+    gap: 30px; 
+    align-items: flex-start; 
+    padding: 0 10px;
+  }
   
   .col { display: flex; flex-direction: column; align-items: center; }
   .row { display: flex; gap: 4px; justify-content: center; margin-bottom: 4px; min-height: 20px; }
@@ -93,7 +102,7 @@
     position: fixed; right: -400px; top: 0; bottom: 0; width: 380px;
     background: #171d27; border-left: 1px solid #2a3446; padding: 20px;
     overflow-y: auto; 
-    -webkit-overflow-scrolling: touch; /* Плавный скролл на телефонах */
+    -webkit-overflow-scrolling: touch; 
     z-index: 500; transition: right 0.3s; box-shadow: -5px 0 20px rgba(0,0,0,0.5);
     display: flex; flex-direction: column; gap: 10px;
   }
@@ -142,12 +151,12 @@
   
   /* Мобильный зум и адаптация */
   @media (max-width: 768px) {
-    body { padding: 10px 5px 220px; }
-    body.admin-mode { padding-right: 0; overflow: hidden; /* Отключаем скролл фона, когда открыта панель */ }
+    /* Увеличили отступ, чтобы шторка с 4 билетами не перекрывала цены */
+    body { padding: 10px 5px 320px; }
+    body.admin-mode { padding-right: 0; overflow: hidden; }
     body.admin-mode .bar { padding-right: 0; }
     
-    /* Исправление для мобильной панели */
-    #adminSidebar { width: 100%; right: -100%; padding-bottom: 80px; /* Место под кнопки */ }
+    #adminSidebar { width: 100%; right: -100%; padding-bottom: 80px; }
     body.admin-mode #adminSidebar { right: 0; }
     
     body.admin-mode .hall-wrap { display: none; }
@@ -212,7 +221,7 @@
 </div>
 
 <div class="legend">
-  <span><i class="dot" style="background:#2a3342"></i>свободно</span>
+  <span><i class="dot" style="background:linear-gradient(90deg, #FFC000, #92D050, #00B0F0)"></i>цветные = свободно</span>
   <span><i class="dot" style="background:#f59e0b"></i>выбрано</span>
   <span><i class="dot" style="background:#5a2a36"></i>занято</span>
   <span><i class="dot" style="background:#000; border:1px solid #555"></i>не продается</span>
@@ -777,7 +786,7 @@ function updateBasePrice(val) {
     render();
 }
 
-// ИСПРАВЛЕННАЯ ЛЕГЕНДА: собирает цвета только для активной стороны
+// ИСПРАВЛЕННАЯ ЛЕГЕНДА: Игнорируем серый цвет
 function renderLegend() {
   const legendDiv = document.getElementById('priceLegend');
   legendDiv.innerHTML = '';
@@ -785,8 +794,8 @@ function renderLegend() {
   let usedColors = new Set();
   
   document.querySelectorAll('.seat').forEach(seat => {
-      // Берем цвет только если место принадлежит текущей активной стороне
-      if (seat.dataset.color && seat.dataset.side === currentEvent) {
+      // Берем цвет только если место принадлежит активной стороне И это НЕ серый цвет
+      if (seat.dataset.color && seat.dataset.side === currentEvent && seat.dataset.color !== '#2a3342') {
           usedColors.add(seat.dataset.color);
       }
   });
@@ -794,14 +803,14 @@ function renderLegend() {
   let items = [];
   
   usedColors.forEach(color => {
-      let price = 600;
-      if (color === '#2a3342') {
-          price = priceSettings.basePrice || 600;
-      } else {
-          price = priceSettings.colorPrices && priceSettings.colorPrices[color] !== undefined ? priceSettings.colorPrices[color] : (priceSettings.basePrice || 600);
-      }
+      let price = priceSettings.colorPrices && priceSettings.colorPrices[color] !== undefined ? priceSettings.colorPrices[color] : (priceSettings.basePrice || 600);
       items.push({ color: color, price: price });
   });
+  
+  // Если вообще нет цветных мест, то показываем базовую цену
+  if (items.length === 0) {
+      items.push({ color: '#2a3342', price: priceSettings.basePrice || 600 });
+  }
   
   items.sort((a, b) => a.price - b.price);
   
