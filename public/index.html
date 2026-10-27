@@ -45,6 +45,7 @@
   .seat.selected{background:var(--selected) !important; color:#1a1206; box-shadow:0 0 0 2px rgba(245,158,11,.6); text-shadow: none;}
   .seat.booked{background:var(--booked) !important; color:transparent; cursor:not-allowed;}
   .seat.blocked{background:var(--blocked) !important; color:transparent; cursor:pointer; border:1px solid #333;}
+  .seat.disabled { opacity: 0.3 !important; cursor: not-allowed !important; filter: grayscale(100%); }
   body.admin-mode .seat.booked { cursor: pointer !important; }
   .seat.hidden-side { opacity: 0.05; pointer-events: none; filter: grayscale(100%); }
   body.admin-mode .seat.hidden-side { opacity: 0.5; pointer-events: auto; border: 1px dashed #888; }
