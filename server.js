@@ -210,33 +210,10 @@ app.post('/api/bookings', rateLimit(60000, 10), async (req, res) => {
       });
     }
 
-    // 3) Проверка лимита (атомарна благодаря lock выше)
+    // 3) Проверка лимита (если используем)
     if (useLimit) {
-      const { rows: userRows } = await client.query(
-        `SELECT COUNT(*) as count FROM bookings
-         WHERE (
-           (LOWER(firstname) = LOWER($1) AND LOWER(lastname) = LOWER($2)
-            AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $3)
-           OR (LOWER(reserve_firstname) = LOWER($1) AND LOWER(reserve_lastname) = LOWER($2))
-         )
-         AND status = 'booked'
-         AND COALESCE(is_admin_booking, false) = false`,
-        [fName, lName, digits]
-      );
-      const userUsed = parseInt(userRows[0].count, 10);
-      const max = appSettings.maxSeats;
-      if (userUsed + seats.length > max) {
-        await client.query('ROLLBACK');
-        const left = Math.max(0, max - userUsed);
-        let msg;
-        if (userUsed >= max) {
-          msg = `У вас уже забронировано ${userUsed} из ${max} мест (лимит исчерпан). Снимите лишние места или обратитесь к администратору.`;
-        } else {
-          msg = `У вас уже ${userUsed} мест из ${max}. Можно добавить ещё не более ${left} (выбрано ${seats.length}).`;
-        }
-        return res.status(409).json({ error: msg, code: 'LIMIT_EXCEEDED', used: userUsed, max, left });
-      }
-
+      // Если указан резерв, проверяем ТОЛЬКО лимит резерва.
+      // Если резерва нет, проверяем лимит основного пользователя.
       if (rFName && rLName) {
         const { rows: resRows } = await client.query(
           `SELECT COUNT(*) as count FROM bookings
@@ -249,12 +226,38 @@ app.post('/api/bookings', rateLimit(60000, 10), async (req, res) => {
           [rFName, rLName]
         );
         const resUsed = parseInt(resRows[0].count, 10);
+        const max = appSettings.maxSeats;
         if (resUsed + seats.length > max) {
           await client.query('ROLLBACK');
           return res.status(409).json({
             error: `У ${rFName} ${rLName} уже занято ${resUsed} мест из ${max}. Резерв исчерпан.`,
             code: 'LIMIT_EXCEEDED'
           });
+        }
+      } else {
+        const { rows: userRows } = await client.query(
+          `SELECT COUNT(*) as count FROM bookings
+           WHERE (
+             (LOWER(firstname) = LOWER($1) AND LOWER(lastname) = LOWER($2)
+              AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $3)
+             OR (LOWER(reserve_firstname) = LOWER($1) AND LOWER(reserve_lastname) = LOWER($2))
+           )
+           AND status = 'booked'
+           AND COALESCE(is_admin_booking, false) = false`,
+          [fName, lName, digits]
+        );
+        const userUsed = parseInt(userRows[0].count, 10);
+        const max = appSettings.maxSeats;
+        if (userUsed + seats.length > max) {
+          await client.query('ROLLBACK');
+          const left = Math.max(0, max - userUsed);
+          let msg;
+          if (userUsed >= max) {
+            msg = `У вас уже забронировано ${userUsed} из ${max} мест (лимит исчерпан). Снимите лишние места или обратитесь к администратору.`;
+          } else {
+            msg = `У вас уже ${userUsed} мест из ${max}. Можно добавить ещё не более ${left} (выбрано ${seats.length}).`;
+          }
+          return res.status(409).json({ error: msg, code: 'LIMIT_EXCEEDED', used: userUsed, max, left });
         }
       }
     }
