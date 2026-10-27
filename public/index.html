@@ -2,11 +2,13 @@
 <html lang="ru" translate="no">
 <head>
 <meta charset="UTF-8">
+<meta name="color-scheme" content="dark">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Бронирование мест - Концертный зал</title>
 <style>
-  :root{
+  :root {
+  color-scheme: dark;
     --bg:#0f1319; --panel:#171d27; --seat-default:#2a3342; --seat-hover:#3a475c;
     --accent:#3b82f6; --selected:#f59e0b; --booked:#5a2a36; --blocked:#000000;
     --text:#e6ebf2; --muted:#8b97a8;
@@ -299,7 +301,11 @@
 
 <div class="bar">
   <div style="display:flex; flex-direction:column; align-items:flex-start; width: 100%; max-width:400px;">
-    <div style="margin-bottom:5px;">Выбрано: <b id="count">0</b></div>
+    <!-- === НОВОЕ: Блок с количеством и суммой === -->
+    <div style="margin-bottom:5px; display:flex; justify-content:space-between; width:100%;">
+      <span>Выбрано: <b id="count">0</b></span>
+      <span id="total-price-display" style="color:#22c55e; font-weight:bold; display:none;">Итого: 0 ₽</span>
+    </div>
     <div id="selected-seats-info" style="font-size:11px; color:var(--muted); max-width:100%; word-break:break-word; margin-bottom:10px;">Места не выбраны</div>
   </div>
   <button class="btn ghost" id="clearSelectionBtn" style="display:none; border: 1px solid #f87171; color:#f87171;" onclick="clearAllSelection()">✕ Сбросить</button>
@@ -814,16 +820,35 @@ function renderLegend() {
 function updateBar(){
   document.getElementById('count').textContent = selected.size;
   document.getElementById('bookBtn').disabled = selected.size === 0;
+  
   const clearBtn = document.getElementById('clearSelectionBtn');
   const infoDiv = document.getElementById('selected-seats-info');
+  const priceDisplay = document.getElementById('total-price-display'); // Новая строка
+
   if (selected.size === 0) {
       clearBtn.style.display = 'none';
       infoDiv.innerHTML = 'Места не выбраны';
+      if (priceDisplay) priceDisplay.style.display = 'none'; // Скрываем цену
   } else {
       clearBtn.style.display = 'inline-block';
       let textArr = [];
-      selected.forEach(k => { textArr.push(formatSeatKey(k)); });
+      let totalSum = 0; // Считаем сумму
+      
+      selected.forEach(k => { 
+          textArr.push(formatSeatKey(k)); 
+          // Ищем кнопку этого места на странице и берем ее цену
+          const btn = document.querySelector(`.seat[data-key="${k}"]`);
+          if (btn) {
+              totalSum += Number(btn.dataset.price) || 0;
+          }
+      });
       infoDiv.innerHTML = textArr.join(', ');
+      
+      // Показываем сумму
+      if (priceDisplay) {
+          priceDisplay.textContent = `Итого: ${totalSum} ₽`;
+          priceDisplay.style.display = 'inline-block';
+      }
   }
 }
 
@@ -1305,7 +1330,13 @@ async function fetchAdminInfo() {
     let msg = `<div><b>Всего у человека:</b> ${data.total} мест</div>`;
     msg += `<div><b>В лимите:</b> ${data.limited}/${data.max} <span style="color:#f59e0b;">(свободно: ${data.left})</span></div>`;
     if (data.admin > 0) msg += `<div><b>Админ-брони (не в лимите):</b> ${data.admin}</div>`;
-    if (data.limited + selected.size > data.max) {
+    
+    // Проверяем, указан ли резерв
+    const rL = document.getElementById('reserveLastname') ? document.getElementById('reserveLastname').value.trim() : '';
+    const rF = document.getElementById('reserveFirstname') ? document.getElementById('reserveFirstname').value.trim() : '';
+    
+    // Показываем предупреждение, только если нет резерва
+    if (data.limited + selected.size > data.max && !(rL && rF)) {
       msg += `<div style="color:#f87171; margin-top:6px;">⚠️ С текущим выбором (${selected.size} мест) будет превышение лимита!</div>`;
     }
     infoEl.innerHTML = msg;
@@ -1314,7 +1345,7 @@ async function fetchAdminInfo() {
   }
 }
 
-['lastname', 'firstname', 'phone'].forEach(id => {
+['lastname', 'firstname', 'phone', 'reserveLastname', 'reserveFirstname'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('input', scheduleAdminInfoCheck);
 });
