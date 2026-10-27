@@ -203,6 +203,11 @@
   <details class="sidebar-section" open>
     <summary>Статистика</summary>
     <div class="details-content">
+      <!-- ... ваши stats-left и stats-right ... -->
+      <button class="btn primary" style="width:100%; background:#ef4444; margin-top:10px; padding:10px;" onclick="checkDuplicates()">🕵️ Проверить дубли по ФИО</button>
+    </div>
+  </details>
+    <div class="details-content">
       <label>Левая часть</label>
       <div id="stats-left" style="font-size:12px; line-height:1.6; margin-bottom:10px;"></div>
       <label>Правая часть</label>
@@ -443,6 +448,16 @@
   </div>
 </div>
 
+  <!-- МОДАЛКА ДУБЛЕЙ -->
+<div class="modal" id="duplicatesModal" hidden>
+  <div class="modal-card">
+    <h2>Дубли по ФИО (обход лимита)</h2>
+    <p style="font-size:12px; color:var(--muted); margin-bottom:15px;">Эти люди бронировали билеты, используя разные номера телефонов. Проверьте, не являются ли они одним человеком.</p>
+    <div id="duplicatesList" style="font-size:13px; margin-bottom:20px; max-height: 50vh; overflow-y: auto;"></div>
+    <button type="button" class="btn primary" style="width:100%;" onclick="document.getElementById('duplicatesModal').hidden = true">Закрыть</button>
+  </div>
+</div>
+  
 <div class="toast" id="toast"></div>
 
 <script>
@@ -894,6 +909,35 @@ async function fetchWithRetry(url, options, retries = 3, delay = 2000) {
     throw new Error('Сетевая ошибка');
 }
 
+  async function checkDuplicates() {
+  const listEl = document.getElementById('duplicatesList');
+  listEl.innerHTML = '<div style="color:#888;">Проверяем базу...</div>';
+  document.getElementById('duplicatesModal').hidden = false;
+
+  try {
+    const res = await fetch(`/api/admin/duplicates?pass=${ADMIN_PASSWORD}`);
+    const data = await res.json();
+    
+    if (!data || data.length === 0) {
+      listEl.innerHTML = '<div style="color:#22c55e;">✅ Подозрительных дублей не найдено!</div>';
+      return;
+    }
+
+    let html = '';
+    data.forEach(d => {
+      html += `<div style="padding:10px; border-bottom:1px solid #333; background:#1f2937; border-radius:8px; margin-bottom:10px;">
+        <div style="font-size:15px; font-weight:bold; color:#fff; margin-bottom:5px;">${d.display_lastname} ${d.display_firstname}</div>
+        <div style="color:#f59e0b; margin-bottom:5px;">Всего мест: <b>${d.total_seats}</b></div>
+        <div style="color:#ddd; font-size:12px;">Номера телефонов: <br>${d.phones.replace(/\|/g, '<br>')}</div>
+      </div>`;
+    });
+    listEl.innerHTML = html;
+
+  } catch (e) {
+    listEl.innerHTML = '<div style="color:#f87171;">Ошибка сети</div>';
+  }
+}
+  
 async function loadSettings() {
   try {
     const res = await fetchWithRetry('/api/settings');
@@ -1329,6 +1373,14 @@ async function fetchAdminInfo() {
     }
     let msg = `<div><b>Всего у человека:</b> ${data.total} мест</div>`;
     msg += `<div><b>В лимите:</b> ${data.limited}/${data.max} <span style="color:#f59e0b;">(свободно: ${data.left})</span></div>`;
+    
+    // === НОВОЕ: Предупреждение о дублях ===
+    if (data.dupPhones > 0) {
+      msg += `<div style="color:#f87171; background:rgba(248,113,113,0.1); padding:6px; border-radius:4px; margin-top:6px; border:1px solid #f87171;">
+        ⚠️ <b>Внимание:</b> Человек с таким ФИО уже бронировал на другие номера (${data.dupPhones} шт.)!
+      </div>`;
+    }
+
     if (data.admin > 0) msg += `<div><b>Админ-брони (не в лимите):</b> ${data.admin}</div>`;
     
     // Проверяем, указан ли резерв
