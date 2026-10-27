@@ -357,12 +357,25 @@ app.get('/api/admin/person-summary', async (req, res) => {
       params
     );
 
+    // Проверяем, есть ли у этого человека брони с ДРУГИМИ номерами
+    let dupPhones = 0;
+    if (digits) {
+       const { rows: dupRows } = await pool.query(`
+         SELECT COUNT(DISTINCT phone) as c
+         FROM bookings
+         WHERE LOWER(firstname) = LOWER($1) AND LOWER(lastname) = LOWER($2)
+           AND status = 'booked'
+           AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) != $3
+       `, [firstname.trim(), lastname.trim(), digits]);
+       dupPhones = parseInt(dupRows[0].c, 10);
+    }
+
     const total = parseInt(totalQ.rows[0].c, 10);
     const limited = parseInt(limitedQ.rows[0].c, 10);
     const admin = total - limited;
 
     res.json({
-      total, limited, admin,
+      total, limited, admin, dupPhones,
       max: appSettings.maxSeats,
       left: Math.max(0, appSettings.maxSeats - limited)
     });
@@ -446,6 +459,27 @@ app.post('/api/admin/bulk-edit', async (req, res) => {
   }
 });
 
+app.get('/api/admin/duplicates', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
+  try {
+    const { rows } = await pool.query(`
+      SELECT 
+        LOWER(firstname) as fname, 
+        LOWER(lastname) as lname,
+        MAX(firstname) as display_firstname,
+        MAX(lastname) as display_lastname,
+        COUNT(DISTINCT phone) as phone_count,
+        STRING_AGG(DISTINCT phone, ' | ') as phones,
+        COUNT(*) as total_seats
+      FROM bookings
+      WHERE status = 'booked' AND COALESCE(is_admin_booking, false) = false
+      GROUP BY LOWER(firstname), LOWER(lastname)
+      HAVING COUNT(DISTINCT phone) > 1
+    `);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
+});
+
 app.get('/api/admin/export', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   try {
@@ -482,13 +516,22 @@ app.get('/api/admin/export', async (req, res) => {
       { header: 'Админ', key: 'admin', width: 10 }, { header: 'Сумма', key: 'price', width: 15 }
     ];
     const sheet2 = workbook.addWorksheet('Сводка');
-    sheet2.columns = [
+        sheet2.columns = [
       { header: 'Фамилия', key: 'lastname', width: 20 }, { header: 'Имя', key: 'firstname', width: 20 },
       { header: 'Телефон', key: 'phone', width: 20 }, { header: 'Группа', key: 'group', width: 20 },
       { header: 'Всего мест', key: 'count', width: 15 }, { header: 'Из них админских', key: 'adminCount', width: 15 },
+      { header: 'Дубли по ФИО', key: 'dupWarning', width: 15 }, 
       { header: 'Итого сумма', key: 'total', width: 15 }
     ];
 
+        // Получаем список дублей для пометки в Excel
+    const { rows: dupRows } = await pool.query(`
+      SELECT LOWER(firstname) as fname, LOWER(lastname) as lname
+      FROM bookings WHERE status = 'booked' AND COALESCE(is_admin_booking, false) = false
+      GROUP BY LOWER(firstname), LOWER(lastname) HAVING COUNT(DISTINCT phone) > 1
+    `);
+    const dupSet = new Set(dupRows.map(r => `${r.fname}_${r.lname}`));
+    
     const summaryMap = {};
     booked.forEach(b => {
       let zoneName = 'Балкон'; let row = 0, seat = 0;
@@ -516,7 +559,11 @@ app.get('/api/admin/export', async (req, res) => {
       if (b.is_admin_booking) summaryMap[key].adminCount++;
       summaryMap[key].total += price;
     });
-    Object.values(summaryMap).forEach(p => sheet2.addRow(p));
+        Object.values(summaryMap).forEach(p => {
+      const isDup = dupSet.has(`${p.lastname.toLowerCase()}_${p.firstname.toLowerCase()}`);
+      p.dupWarning = isDup ? '⚠️ ЕСТЬ ДРУГОЙ НОМЕР' : '';
+      sheet2.addRow(p);
+    });
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="tickets.xlsx"');
