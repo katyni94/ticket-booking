@@ -236,7 +236,16 @@
   <button class="btn primary" id="bookBtn" disabled>Забронировать</button>
 </div>
 
-<!-- МОДАЛКИ -->
+<!-- МОДАЛКА КРИТИЧЕСКОЙ ОШИБКИ (БОЛЬШАЯ) -->
+<div class="modal" id="bigAlertModal" hidden style="background: rgba(5,8,12,.9);">
+  <div class="modal-card" style="text-align:center; border: 2px solid #f87171; box-shadow: 0 0 30px rgba(248,113,113,0.3); padding: 40px 20px;">
+    <h2 style="color: #f87171; font-size: 24px; margin-bottom: 20px;">Ой! Места уже заняты 😔</h2>
+    <div id="bigAlertText" style="font-size: 16px; line-height: 1.6; margin-bottom: 25px; color: #e6ebf2;"></div>
+    <button class="btn primary" style="background:#3b82f6; font-size: 16px; padding: 12px 24px; width: 100%;" onclick="document.getElementById('bigAlertModal').hidden = true">Хорошо, понятно</button>
+  </div>
+</div>
+
+<!-- ОСТАЛЬНЫЕ МОДАЛКИ -->
 <div class="modal" id="modal" hidden>
   <div class="modal-card">
     <h2 style="margin-top:0;">Подтверждение брони</h2>
@@ -554,7 +563,6 @@ document.body.addEventListener('click', async e => {
   updateBar();
 });
 
-// ПРОВЕРКА ТЕЛЕФОНА В МОДАЛКЕ БРОНИРОВАНИЯ
 async function checkPhone() {
   const phone = document.getElementById('phone').value.trim();
   const box = document.getElementById('userInfoBox'); const txt = document.getElementById('userInfoText');
@@ -566,7 +574,6 @@ async function checkPhone() {
           const d = await res.json(); 
           box.style.display = 'block'; 
           
-          // Запрашиваем лимиты
           const sumRes = await fetch(`/api/admin/person-summary?pass=${ADMIN_PASSWORD}&phone=${encodeURIComponent(phone)}`);
           let limitText = '';
           if (sumRes.ok) {
@@ -633,7 +640,6 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
   
   if (isAdminMode) { 
       payload.adminPass = ADMIN_PASSWORD; 
-      // У админа по умолчанию лимит выключен, если не выбран ручной режим
       payload.ignoreLimit = true; 
       if (isManual) {
           payload.manualBooking = true;
@@ -646,10 +652,46 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
   try {
     const res = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const data = await res.json();
-    if (!res.ok) { err.textContent = data.error; if (data.code === 'SEATS_TAKEN') { selected.clear(); await loadBookings(); } return; }
+    
+    if (!res.ok) { 
+        if (data.code === 'SEATS_TAKEN') {
+            const taken = data.takenSeats || [];
+            const takenFormatted = taken.map(k => formatSeatKey(k)).join(', ');
+            
+            // Убираем только занятые места из выбора
+            for (const k of taken) {
+                selected.delete(k);
+                const btn = document.querySelector(`.seat[data-key="${k}"]`);
+                if (btn) {
+                    btn.classList.remove('selected');
+                    btn.classList.add('booked'); // Сразу делаем красным
+                }
+            }
+            
+            updateBar();
+            document.getElementById('modal').hidden = true;
+            
+            // Показываем большую модалку
+            if (selected.size > 0) {
+                showBigAlert(`Места <b>${takenFormatted}</b> только что занял кто-то другой.<br><br>Но не расстраивайтесь! Мы <b>оставили в вашем выборе</b> свободные места. Вы можете продолжить с ними или выбрать другие.`);
+            } else {
+                showBigAlert(`Места <b>${takenFormatted}</b> только что занял кто-то другой.<br><br>Ваш выбор полностью сброшен. Пожалуйста, выберите другие свободные места.`);
+            }
+            return;
+        }
+        
+        err.textContent = data.error; 
+        return; 
+    }
+    
     selected.clear(); document.getElementById('modal').hidden = true; loadBookings(); showToast('Успешно забронировано!');
   } catch (err) { err.textContent = 'Ошибка сети'; } finally { btn.disabled = false; btn.textContent = 'Забронировать'; }
 });
+
+function showBigAlert(msg) {
+    document.getElementById('bigAlertText').innerHTML = msg;
+    document.getElementById('bigAlertModal').hidden = false;
+}
 
 document.getElementById('myTicketsBtn').addEventListener('click', () => { document.getElementById('myTicketsModal').hidden = false; document.getElementById('ticketsList').innerHTML = ''; });
 async function searchTickets() {
