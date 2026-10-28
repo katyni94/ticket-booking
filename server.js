@@ -35,12 +35,11 @@ setInterval(() => { const now = Date.now(); for (const [k, v] of rateLimitStore)
 let appSettings = {
   basePrice: 600, colorPrices: { '#FFC000': 600, '#FFFF00': 800, '#92D050': 1000, '#C55A11': 1100, '#00B0F0': 1300, '#B4A7D6': 1400, '#F4B183': 1500 },
   rules: [], hidden: { left: false, right: false }, maxSeats: 4, bgUrl: '', bgSize: 'cover', bgPosX: 50, bgPosY: 50, restrictAdminSeats: true,
-  groupRestrictions: {} // НОВОЕ: Ограничения по группам
+  groupRestrictions: {} 
 };
 
 function normPhone(p) { return String(p || '').replace(/\D/g, '').slice(-10); }
 
-// Вспомогательная функция для определения стороны места
 const tanci_parterre = { 1: [19, 39], 2: [18, 37], 3: [18, 37], 4: [17, 35], 5: [10, 20], 6: [17, 35], 7: [15, 31], 8: [16, 33], 9: [15, 32], 10: [14, 30], 11: [14, 30], 12: [14, 29], 13: [14, 29], 14: [14, 29], 15: [14, 29], 16: [14, 28], 17: [14, 28], 18: [13, 27], 19: [11, 19], 20: [11, 19], 21: [11, 19], 22: [15, 30], 23: [10, 20], 24: [9, 17], 25: [10, 19] };
 const tanci_central = { 1: [14, 27], 2: [14, 28], 3: [15, 30], 4: [16, 31], 5: [15, 28] };
 function getSeatSide(seatKey) {
@@ -161,7 +160,6 @@ app.post('/api/bookings', rateLimit(60000, 15), async (req, res) => {
     userGroup = userRes.rows[0].group_name || groupName || '';
   } catch (e) { return res.status(500).json({ error: 'Ошибка проверки пользователя' }); }
 
-  // Проверка ограничений по группам
   const isAdmin = (adminPass === ADMIN_PASSWORD);
   if (!isAdmin && appSettings.groupRestrictions && appSettings.groupRestrictions[userGroup]) {
       const restriction = appSettings.groupRestrictions[userGroup];
