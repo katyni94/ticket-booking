@@ -144,29 +144,41 @@ app.delete('/api/admin/users', async (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/bookings', rateLimit(60000, 15), async (req, res) => {
-  const { seats, phone, reserveFirstname, reserveLastname, groupName, adminPass, ignoreLimit } = req.body || {};
+app.post('/api/bookings', rateLimit(60000, 20), async (req, res) => {
+  const { seats, phone, reserveFirstname, reserveLastname, groupName, adminPass, ignoreLimit, manualBooking, manualFirstname, manualLastname, manualGroup } = req.body || {};
+  
   if (!Array.isArray(seats) || seats.length === 0) return res.status(400).json({ error: 'Не выбраны места' });
   if (seats.length > 20) return res.status(400).json({ error: 'Слишком много мест' });
-  
-  const digits = normPhone(phone);
-  if (digits.length < 10) return res.status(400).json({ error: 'Введите корректный телефон' });
-
-  let fName = '', lName = '', userGroup = groupName || '';
-  try {
-    const userRes = await pool.query('SELECT * FROM users WHERE RIGHT(REGEXP_REPLACE(phone, \'[^0-9]\', \'\', \'g\'), 10) = $1', [digits]);
-    if (userRes.rows.length === 0) return res.status(400).json({ error: 'Пользователь с таким телефоном не найден в базе' });
-    fName = userRes.rows[0].firstname; lName = userRes.rows[0].lastname;
-    userGroup = userRes.rows[0].group_name || groupName || '';
-  } catch (e) { return res.status(500).json({ error: 'Ошибка проверки пользователя' }); }
 
   const isAdmin = (adminPass === ADMIN_PASSWORD);
-  if (!isAdmin && appSettings.groupRestrictions && appSettings.groupRestrictions[userGroup]) {
-      const restriction = appSettings.groupRestrictions[userGroup];
-      if (restriction !== 'both') {
-          const side = getSeatSide(seats[0]);
-          if (side !== restriction) {
-              return res.status(403).json({ error: `Ваша группа может бронировать только ${restriction === 'left' ? 'левую' : 'правую'} часть зала.` });
+  
+  let fName = '', lName = '', userGroup = groupName || '';
+  let actualPhone = phone ? phone.trim() : '';
+
+  if (isAdmin && manualBooking) {
+      if (!manualFirstname || !manualLastname) return res.status(400).json({ error: 'Введите имя и фамилию' });
+      fName = manualFirstname.trim();
+      lName = manualLastname.trim();
+      userGroup = manualGroup ? manualGroup.trim() : '';
+      if (!actualPhone) actualPhone = 'Админ';
+  } else {
+      const digits = normPhone(phone);
+      if (digits.length < 10) return res.status(400).json({ error: 'Введите корректный телефон' });
+
+      try {
+        const userRes = await pool.query('SELECT * FROM users WHERE RIGHT(REGEXP_REPLACE(phone, \'[^0-9]\', \'\', \'g\'), 10) = $1', [digits]);
+        if (userRes.rows.length === 0) return res.status(400).json({ error: 'Пользователь с таким телефоном не найден в базе' });
+        fName = userRes.rows[0].firstname; lName = userRes.rows[0].lastname;
+        userGroup = userRes.rows[0].group_name || groupName || '';
+      } catch (e) { return res.status(500).json({ error: 'Ошибка проверки пользователя' }); }
+
+      if (!isAdmin && appSettings.groupRestrictions && appSettings.groupRestrictions[userGroup]) {
+          const restriction = appSettings.groupRestrictions[userGroup];
+          if (restriction !== 'both') {
+              const side = getSeatSide(seats[0]);
+              if (side !== restriction) {
+                  return res.status(403).json({ error: `Ваша группа может бронировать только ${restriction === 'left' ? 'левую' : 'правую'} часть зала.` });
+              }
           }
       }
   }
@@ -178,7 +190,7 @@ app.post('/api/bookings', rateLimit(60000, 15), async (req, res) => {
   const rLName = reserveLastname ? reserveLastname.trim() : null;
   if ((rFName && !rLName) || (!rFName && rLName)) return res.status(400).json({ error: 'Для резерва нужно ввести и имя, и фамилию' });
 
-  let limitPhone = phone.trim();
+  let limitPhone = actualPhone;
   let limitFName = fName;
   let limitLName = lName;
 
@@ -220,7 +232,7 @@ app.post('/api/bookings', rateLimit(60000, 15), async (req, res) => {
       const r = await client.query(
         `INSERT INTO bookings (seat_key, firstname, lastname, phone, reserve_firstname, reserve_lastname, group_name, status, is_admin_booking) 
          VALUES ($1, $2, $3, $4, $5, $6, $7, 'booked', $8) ON CONFLICT (seat_key) DO NOTHING RETURNING seat_key`, 
-        [seat, fName, lName, phone.trim(), rFName, rLName, userGroup, isAdminBooking]
+        [seat, fName, lName, actualPhone, rFName, rLName, userGroup, isAdminBooking]
       );
       if (r.rowCount === 0) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Место занято', code: 'SEATS_TAKEN' }); }
     }
