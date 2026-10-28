@@ -238,9 +238,26 @@
     <h2 style="margin-top:0;">Подтверждение брони</h2>
     <p class="modal-seats" id="modalSeats" style="color:var(--muted); font-size:13px; white-space:pre-line;"></p>
     <form id="bookingForm" novalidate>
-      <label style="display:block; font-size:13px; color:var(--muted); margin-bottom:10px;">Номер телефона
+      
+      <!-- НОВЫЙ БЛОК ДЛЯ АДМИНА -->
+      <div id="adminManualBlock" style="display:none; background:#1f2937; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #eab308;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; margin:0; color:#eab308;">
+          <input type="checkbox" id="manualBookingCheckbox" onchange="toggleManualBooking()" style="width:18px; height:18px; margin:0;">
+          Ручное бронирование (без базы)
+        </label>
+        <div id="manualFields" style="display:none; margin-top:10px;">
+          <div style="display:flex; gap:10px; margin-bottom:10px;">
+            <input id="m-lastname" type="text" placeholder="Фамилия" style="flex:1; margin:0;">
+            <input id="m-firstname" type="text" placeholder="Имя" style="flex:1; margin:0;">
+          </div>
+          <input id="m-group" type="text" placeholder="Группа" style="margin-bottom:0;">
+        </div>
+      </div>
+
+      <label id="phoneBlock" style="display:block; font-size:13px; color:var(--muted); margin-bottom:10px;">Номер телефона
         <input id="phone" type="tel" placeholder="+7 (999) 123-45-67" style="margin-top:5px;" oninput="formatPhone(this)" onchange="checkPhone()">
       </label>
+      
       <div id="userInfoBox" style="display:none; background:#1f2937; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #3b82f6;">
         <div style="font-size:12px; color:#60a5fa; font-weight:bold; margin-bottom:5px;">Данные из базы:</div>
         <div id="userInfoText" style="font-size:13px; line-height:1.5;"></div>
@@ -339,7 +356,6 @@ const centralMaxSeats = [27, 28, 30, 31, 28];
 const tanci_parterre = { 1: [19, 39], 2: [18, 37], 3: [18, 37], 4: [17, 35], 5: [10, 20], 6: [17, 35], 7: [15, 31], 8: [16, 33], 9: [15, 32], 10: [14, 30], 11: [14, 30], 12: [14, 29], 13: [14, 29], 14: [14, 29], 15: [14, 29], 16: [14, 28], 17: [14, 28], 18: [13, 27], 19: [11, 19], 20: [11, 19], 21: [11, 19], 22: [15, 30], 23: [10, 20], 24: [9, 17], 25: [10, 19] };
 const tanci_central = { 1: [14, 27], 2: [14, 28], 3: [15, 30], 4: [16, 31], 5: [15, 28] };
 
-// ИСХОДНЫЕ КОНФИГИ БАЛКОНОВ (БЕЗ ИЗМЕНЕНИЙ)
 const leftBalcAConf = [ { rowNum: 4, present: (r) => r >= 2 }, { rowNum: 3, present: (r) => r >= 1 }, { rowNum: 2, present: (r) => r >= 1 }, { rowNum: 1, present: () => true } ];
 const rightBalcAConf = [ { rowNum: 1, present: () => true }, { rowNum: 2, present: (r) => r >= 1 }, { rowNum: 3, present: () => true }, { rowNum: 4, present: (r) => r >= 1 } ];
 const leftBalcBConf = [ { rowNum: 2, present: (r) => r >= 1 }, { rowNum: 1, present: () => true } ];
@@ -357,7 +373,6 @@ function getPriceAndColor(zone, side, row, seatNum) { if (priceSettings.rules) {
 function createSeat(key, num, color, price, side, zoneName, rowNum) { const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'seat'; btn.dataset.key = key; btn.dataset.side = side; btn.dataset.zone = zoneName; btn.dataset.row = rowNum; btn.dataset.seat = num; btn.dataset.price = price; btn.textContent = num; btn.style.background = color; btn.dataset.color = color; if (side !== currentEvent) btn.classList.add('disabled'); if (bookedSet.has(key)) { if (bookedSet.has(key + '_blocked')) btn.classList.add('blocked'); else btn.classList.add('booked'); } if (selected.has(key)) btn.classList.add('selected'); return btn; }
 function switchEvent(event) { if (forcedSideMode) return; if (priceSettings.hidden && priceSettings.hidden[event]) return; currentEvent = event; document.getElementById('btn-event-left').classList.toggle('active', event === 'left'); document.getElementById('btn-event-right').classList.toggle('active', event === 'right'); render(); }
 
-// ВОЗВРАЩЕННАЯ ФУНКЦИЯ БЕЗ НОМЕРОВ РЯДОВ НА БАЛКОНАХ
 function renderBalcony(containerId, config, totalSeats, zoneName, side, balcId) {
   const container = document.getElementById(containerId); if (!container) return; container.innerHTML = '';
   for (let r = 0; r < totalSeats; r++) {
@@ -375,7 +390,6 @@ function renderBalcony(containerId, config, totalSeats, zoneName, side, balcId) 
   }
 }
 
-// ФУНКЦИЯ ДЛЯ ПАРТЕРА И ЦЕНТРА (С НОМЕРАМИ РЯДОВ)
 function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isParterre = false) {
   const container = document.getElementById(containerId); if (!container) return; container.innerHTML = '';
   gridData.forEach((rowData, rowIndex) => {
@@ -527,22 +541,66 @@ async function checkPhone() {
 
 document.getElementById('bookBtn').addEventListener('click', () => {
   if (!selected.size) return;
-  document.getElementById('modalSeats').textContent = seatsText(); document.getElementById('error').textContent = ''; document.getElementById('bookingForm').reset(); document.getElementById('userInfoBox').style.display = 'none';
+  document.getElementById('modalSeats').textContent = seatsText(); 
+  document.getElementById('error').textContent = ''; 
+  document.getElementById('bookingForm').reset(); 
+  document.getElementById('userInfoBox').style.display = 'none';
+  
+  // ЛОГИКА ДЛЯ АДМИНА
+  if (isAdminMode) {
+      document.getElementById('adminManualBlock').style.display = 'block';
+      document.getElementById('manualBookingCheckbox').checked = false;
+      document.getElementById('manualFields').style.display = 'none';
+      document.getElementById('phoneBlock').style.display = 'block';
+  } else {
+      document.getElementById('adminManualBlock').style.display = 'none';
+  }
+
   document.getElementById('modal').hidden = false; document.getElementById('phone').focus();
 });
+
+function toggleManualBooking() {
+    const isManual = document.getElementById('manualBookingCheckbox').checked;
+    document.getElementById('manualFields').style.display = isManual ? 'block' : 'none';
+    document.getElementById('phoneBlock').style.display = isManual ? 'none' : 'block';
+    if (isManual) {
+        document.getElementById('phone').value = '';
+        document.getElementById('userInfoBox').style.display = 'none';
+    }
+}
+
 function seatsText() { const g = {}; for (const k of selected) { let p = k.split('-'); let z = 'Балкон', r, c; if (p[0] === 'parterre') { z = 'Партер'; r = p[1]; c = p[2]; } else if (p[0] === 'central') { z = 'Центр'; r = p[1]; c = p[2]; } else if (p[0] === 'balc') { z = 'Балкон'; r = p[3]; c = p[4]; } if(!g[`${z} Ряд ${r}`]) g[`${z} Ряд ${r}`] = []; g[`${z} Ряд ${r}`].push(Number(c)); } return Object.keys(g).map(k => `${k}: место ${g[k].sort((a,b)=>a-b).join(', ')}`).join('\n'); }
 
 document.getElementById('bookingForm').addEventListener('submit', async e => {
   e.preventDefault();
   const err = document.getElementById('error'); err.textContent = '';
+  
+  const isManual = isAdminMode && document.getElementById('manualBookingCheckbox').checked;
   const phone = document.getElementById('phone').value.trim();
   const rL = document.getElementById('reserveLastname').value.trim(); const rF = document.getElementById('reserveFirstname').value.trim();
-  if (phone.replace(/\D/g,'').length < 11) { err.textContent = 'Введите корректный телефон'; return; }
+  
+  if (!isManual && phone.replace(/\D/g,'').length < 11) { err.textContent = 'Введите корректный телефон'; return; }
+  if (isManual) {
+      if (!document.getElementById('m-lastname').value.trim() || !document.getElementById('m-firstname').value.trim()) {
+          err.textContent = 'Введите фамилию и имя для ручного бронирования'; return;
+      }
+  }
   if ((rL && !rF) || (!rL && rF)) { err.textContent = 'Для резерва введите и имя, и фамилию'; return; }
   
   const btn = document.getElementById('submitBtn'); btn.disabled = true; btn.textContent = '...';
+  
   const payload = { seats: [...selected], phone, reserveFirstname: rF, reserveLastname: rL };
-  if (isAdminMode) { payload.adminPass = ADMIN_PASSWORD; payload.ignoreLimit = true; }
+  
+  if (isAdminMode) { 
+      payload.adminPass = ADMIN_PASSWORD; 
+      payload.ignoreLimit = true; 
+      if (isManual) {
+          payload.manualBooking = true;
+          payload.manualFirstname = document.getElementById('m-firstname').value.trim();
+          payload.manualLastname = document.getElementById('m-lastname').value.trim();
+          payload.manualGroup = document.getElementById('m-group').value.trim();
+      }
+  }
   
   try {
     const res = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
