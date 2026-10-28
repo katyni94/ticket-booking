@@ -15,7 +15,7 @@ const pool = new Pool({
   max: 25, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000, statement_timeout: 15000, query_timeout: 15000
 });
 
-app.use(express.json({ limit: '10mb' })); // Увеличили лимит для загрузки Excel
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const rateLimitStore = new Map();
@@ -69,7 +69,6 @@ app.get('/api/bookings', async (req, res) => {
   try { const { rows } = await pool.query('SELECT seat_key, status FROM bookings'); res.json(rows); } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
-// === БАЗА КЛИЕНТОВ ===
 app.get('/api/auth/check-phone', async (req, res) => {
   const phone = normPhone(req.query.phone);
   if (!phone) return res.status(400).json({ error: 'Введите телефон' });
@@ -86,7 +85,6 @@ app.get('/api/admin/users', async (req, res) => {
   res.json(rows);
 });
 
-// Загрузка базы списком
 app.post('/api/admin/bulk-users', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Нет доступа' });
   const { users } = req.body;
@@ -127,7 +125,6 @@ app.delete('/api/admin/users', async (req, res) => {
   res.json({ ok: true });
 });
 
-// === БРОНИРОВАНИЕ (С УЧЕТОМ РЕЗЕРВА ПО ФИО) ===
 app.post('/api/bookings', rateLimit(60000, 15), async (req, res) => {
   const { seats, phone, reserveFirstname, reserveLastname, groupName, adminPass, ignoreLimit } = req.body || {};
   if (!Array.isArray(seats) || seats.length === 0) return res.status(400).json({ error: 'Не выбраны места' });
@@ -152,7 +149,6 @@ app.post('/api/bookings', rateLimit(60000, 15), async (req, res) => {
   const rLName = reserveLastname ? reserveLastname.trim() : null;
   if ((rFName && !rLName) || (!rFName && rLName)) return res.status(400).json({ error: 'Для резерва нужно ввести и имя, и фамилию' });
 
-  // Определяем, на кого считать лимит
   let limitPhone = phone.trim();
   let limitFName = fName;
   let limitLName = lName;
@@ -207,7 +203,6 @@ app.post('/api/bookings', rateLimit(60000, 15), async (req, res) => {
   } finally { client.release(); }
 });
 
-// === ОСТАЛЬНЫЕ API ===
 app.get('/api/my-tickets', async (req, res) => {
   const { phone } = req.query; const digits = normPhone(phone);
   if (digits.length < 10) return res.status(400).json({ error: 'Введите телефон' });
@@ -262,7 +257,6 @@ app.post('/api/admin/force-cancel', async (req, res) => {
   await pool.query('DELETE FROM bookings WHERE seat_key = $1', [req.body.seat]); res.json({ ok: true });
 });
 
-// Группировка по людям для массового снятия
 app.get('/api/admin/bookings-by-users', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
   try {
@@ -278,11 +272,13 @@ app.get('/api/admin/bookings-by-users', async (req, res) => {
 app.post('/api/admin/bulk-cancel-users', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
   const { phones } = req.body;
-  if (!phones || !phones.length) return res.status(400).json({ error: 'Никто не выбран' });
+  if (!phones || !phones.length) return res.status(400).json({ error: 'Никто не выбран для удаления' });
   try {
-    await pool.query(`DELETE FROM bookings WHERE RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = ANY($1) AND status = 'booked'`, [phones]);
+    // Очищаем телефоны от символов, оставляя только 10 последних цифр
+    const normPhones = phones.map(p => p.replace(/\D/g, '').slice(-10));
+    await pool.query(`DELETE FROM bookings WHERE RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = ANY($1) AND status = 'booked'`, [normPhones]);
     res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
+  } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
 });
 
 app.post('/api/admin/edit-booking', async (req, res) => {
@@ -309,7 +305,6 @@ app.get('/api/admin/duplicates', async (req, res) => {
   res.json(rows);
 });
 
-// ЭКСПОРТ EXCEL
 app.get('/api/admin/export', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   try {
@@ -327,25 +322,6 @@ app.get('/api/admin/export', async (req, res) => {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="tickets.xlsx"');
     await workbook.xlsx.write(res); res.end();
-  } catch (err) { res.status(500).send('Ошибка'); }
-});
-
-app.get('/api/admin/export-word', async (req, res) => {
-  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
-  try {
-    const { rows: booked } = await pool.query("SELECT * FROM bookings WHERE status = 'booked' ORDER BY created_at ASC");
-    let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><style>body{font-family:Arial;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #000;padding:5px;}</style></head><body><h1>Билеты</h1><table><tr><th>Зона</th><th>Ряд</th><th>Место</th><th>Фамилия</th><th>Имя</th><th>Телефон</th><th>Группа</th></tr>`;
-    booked.forEach(b => {
-      let zoneName = 'Балкон'; let row = 0, seat = 0;
-      if (b.seat_key.startsWith('parterre-')) { zoneName = 'Партер'; const p = b.seat_key.split('-'); row = +p[1]; seat = +p[2]; }
-      else if (b.seat_key.startsWith('central-')) { zoneName = 'Центр. балкон'; const p = b.seat_key.split('-'); row = +p[1]; seat = +p[2]; }
-      else if (b.seat_key.startsWith('balc-')) { const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; zoneName = b.seat_key.includes('left') ? 'Левый балкон' : 'Правый балкон'; }
-      html += `<tr><td>${zoneName}</td><td>${row}</td><td>${seat}</td><td>${b.lastname}</td><td>${b.firstname}</td><td>${b.phone}</td><td>${b.group_name || ''}</td></tr>`;
-    });
-    html += `</table></body></html>`;
-    res.setHeader('Content-Type', 'application/msword');
-    res.setHeader('Content-Disposition', 'attachment; filename="tickets.doc"');
-    res.send(html);
   } catch (err) { res.status(500).send('Ошибка'); }
 });
 
