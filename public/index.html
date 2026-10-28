@@ -131,8 +131,14 @@
   <div style="display:flex; flex-direction:column; gap:10px; margin-bottom: 5px;">
     <button class="btn primary" style="width: 100%; background:#22c55e; padding: 12px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD + '&side=all', '_blank')">📥 Скачать Excel (Всё)</button>
     <div style="display:flex; gap:5px;">
-        <button class="btn ghost" style="flex:1; font-size:11px; padding:8px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD + '&side=left', '_blank')">Левая</button>
-        <button class="btn ghost" style="flex:1; font-size:11px; padding:8px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD + '&side=right', '_blank')">Правая</button>
+        <button class="btn ghost" style="flex:1; font-size:11px; padding:8px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD + '&side=left', '_blank')">Левая XLS</button>
+        <button class="btn ghost" style="flex:1; font-size:11px; padding:8px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD + '&side=right', '_blank')">Правая XLS</button>
+    </div>
+
+    <button class="btn primary" style="width: 100%; background:#2b579a; padding: 12px;" onclick="window.open('/api/admin/export-word?pass=' + ADMIN_PASSWORD + '&side=all', '_blank')">📄 Скачать Word (Всё)</button>
+    <div style="display:flex; gap:5px;">
+        <button class="btn ghost" style="flex:1; font-size:11px; padding:8px;" onclick="window.open('/api/admin/export-word?pass=' + ADMIN_PASSWORD + '&side=left', '_blank')">Левая DOC</button>
+        <button class="btn ghost" style="flex:1; font-size:11px; padding:8px;" onclick="window.open('/api/admin/export-word?pass=' + ADMIN_PASSWORD + '&side=right', '_blank')">Правая DOC</button>
     </div>
   </div>
 
@@ -386,7 +392,7 @@ const parterreStrings = ["-000000000--000000000000000000000--000000000-","--0000
 const parterreMaxSeats = [39, 37, 37, 35, 20, 35, 31, 33, 32, 30, 30, 29, 29, 29, 29, 28, 28, 27, 19, 19, 19, 30, 20, 17, 19];
 const centralStrings = ["--------000000000000000000000000000-------------","-------0000000000000000000000000000-------------","------000000000000000000000000000000------------","------0000000000000000000000000000000------------","------00000000000000----00000000000000----------"];
 const centralMaxSeats = [27, 28, 30, 31, 28];
-const tanci_parterre = { 1: [19, 39], 2: [18, 37], 3: [18, 37], 4: [17, 35], 5: [10, 20], 6: [17, 35], 7: [15, 31], 8: [16, 33], 9: [15, 32], 10: [14, 30], 11: [14, 30], 12: [14, 29], 13: [14, 29], 14: [14, 29], 15: [14, 29], 16: [14, 28], 17: [14, 28], 18: [13, 27], 19: [11, 19], 20: [11, 19], 21: [11, 19], 22: [15, 30], 23: [10, 20], 24: [9, 17], 25: [10, 19] };
+const tanci_parterre = { 1: [19, 39], 2: [18, 37], 3: [18, 37], 4: [17, 35], 5: [10, 20], 6: [17, 35], 7: [15, 31], 8: [16, 33], 9: [15, 32], 10: [14, 30], 11: [14, 30], 12: [14, 29], 13: [14, 29], 14: [14, 29], 15: [14, 29], 16: [14, 28], 17: [14, 28], 18: [13, 27], 19: [11, 19], 20: [11, 19], 21: [11, 19], 22: [14, 30], 23: [9, 20], 24: [7, 17], 25: [8, 19] };
 const tanci_central = { 1: [14, 27], 2: [14, 28], 3: [15, 30], 4: [16, 31], 5: [15, 28] };
 
 const leftBalcAConf = [ { rowNum: 4, present: (r) => r >= 2 }, { rowNum: 3, present: (r) => r >= 1 }, { rowNum: 2, present: (r) => r >= 1 }, { rowNum: 1, present: () => true } ];
