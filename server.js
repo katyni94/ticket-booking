@@ -93,7 +93,7 @@ app.get('/api/auth/check-phone', async (req, res) => {
   if (!phone) return res.status(400).json({ error: 'Введите телефон' });
   try {
     const { rows } = await pool.query('SELECT * FROM users WHERE RIGHT(REGEXP_REPLACE(phone, \'[^0-9]\', \'\', \'g\'), 10) = $1', [phone]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Номер не найден в базе. Обратитесь к администратору.' });
+    if (rows.length === 0) return res.status(404).json({ error: 'Номер не найден в базе.' });
     res.json({ found: true, user: rows[0] });
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
@@ -144,6 +144,7 @@ app.delete('/api/admin/users', async (req, res) => {
   res.json({ ok: true });
 });
 
+// БРОНИРОВАНИЕ
 app.post('/api/bookings', rateLimit(60000, 20), async (req, res) => {
   const { seats, phone, reserveFirstname, reserveLastname, groupName, adminPass, ignoreLimit, manualBooking, manualFirstname, manualLastname, manualGroup } = req.body || {};
   
@@ -209,17 +210,18 @@ app.post('/api/bookings', rateLimit(60000, 20), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('SELECT pg_advisory_xact_lock(1, hashtext($1))', [`user:${limitFName}:${limitLName}:${normPhone(limitPhone)}`]);
+    await client.query('SELECT pg_advisory_xact_lock(1, hashtext($1))', [`user:${normPhone(limitPhone)}`]);
     
     const { rows: existing } = await client.query('SELECT seat_key FROM bookings WHERE seat_key = ANY($1)', [seats]);
     if (existing.length > 0) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Места уже заняты', code: 'SEATS_TAKEN' }); }
 
     if (useLimit) {
+      // ЖЕСТКАЯ ПРОВЕРКА ПО ТЕЛЕФОНУ
       const { rows: userRows } = await client.query(
         `SELECT COUNT(*) as count FROM bookings 
-         WHERE (LOWER(firstname)=LOWER($1) AND LOWER(lastname)=LOWER($2) AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $3) 
+         WHERE RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $1 
          AND status='booked' AND COALESCE(is_admin_booking, false) = false`, 
-        [limitFName, limitLName, normPhone(limitPhone)]
+        [normPhone(limitPhone)]
       );
       const userUsed = parseInt(userRows[0].count, 10);
       if (userUsed + seats.length > appSettings.maxSeats) {
@@ -321,6 +323,7 @@ app.post('/api/admin/bulk-cancel-users', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД: ' + err.message }); }
 });
 
+// ПЕРЕНОС БРОНИ (РЕДАКТИРОВАНИЕ)
 app.post('/api/admin/edit-booking', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Нет доступа' });
   const { seat, firstname, lastname, phone, group_name, reserve_firstname, reserve_lastname, is_admin_booking } = req.body;
@@ -345,22 +348,33 @@ app.get('/api/admin/duplicates', async (req, res) => {
   res.json(rows);
 });
 
+// ЭКСПОРТ EXCEL (С ФИЛЬТРОМ ПО СТОРОНАМ)
 app.get('/api/admin/export', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
+  const sideFilter = req.query.side; // 'left', 'right', or undefined
+  
   try {
     const { rows: booked } = await pool.query("SELECT * FROM bookings WHERE status = 'booked' ORDER BY created_at ASC");
+    
+    const filteredBooked = booked.filter(b => {
+        if (!sideFilter || sideFilter === 'all') return true;
+        return getSeatSide(b.seat_key) === sideFilter;
+    });
+
     const workbook = new ExcelJS.Workbook();
     const sheet1 = workbook.addWorksheet('Билеты');
     sheet1.columns = [ { header: 'Зона', key: 'zone', width: 20 }, { header: 'Ряд', key: 'row', width: 10 }, { header: 'Место', key: 'seat', width: 10 }, { header: 'Фамилия', key: 'lastname', width: 20 }, { header: 'Имя', key: 'firstname', width: 20 }, { header: 'Телефон', key: 'phone', width: 20 }, { header: 'Резерв', key: 'reserve', width: 25 }, { header: 'Группа', key: 'group', width: 20 }, { header: 'Админ', key: 'admin', width: 10 }, { header: 'Сумма', key: 'price', width: 15 } ];
-    booked.forEach(b => {
+    
+    filteredBooked.forEach(b => {
       let zoneName = 'Балкон'; let row = 0, seat = 0;
       if (b.seat_key.startsWith('parterre-')) { zoneName = 'Партер'; const p = b.seat_key.split('-'); row = +p[1]; seat = +p[2]; }
       else if (b.seat_key.startsWith('central-')) { zoneName = 'Центр. балкон'; const p = b.seat_key.split('-'); row = +p[1]; seat = +p[2]; }
       else if (b.seat_key.startsWith('balc-')) { const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; zoneName = b.seat_key.includes('left') ? 'Левый балкон' : 'Правый балкон'; }
       sheet1.addRow({ zone: zoneName, row, seat, lastname: b.lastname, firstname: b.firstname, phone: b.phone, reserve: b.reserve_lastname || '', group: b.group_name || '', admin: b.is_admin_booking ? 'да' : '', price: 600 });
     });
+
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="tickets.xlsx"');
+    res.setHeader('Content-Disposition', `attachment; filename="tickets_${sideFilter || 'all'}.xlsx"`);
     await workbook.xlsx.write(res); res.end();
   } catch (err) { res.status(500).send('Ошибка'); }
 });
