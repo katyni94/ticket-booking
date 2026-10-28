@@ -452,10 +452,30 @@ function render() {
   updateBar(); renderLegend(); updateStats(); renderColorPricesList(); renderGroupRestrictions();
 }
 function updateSeatsUI() {
-  let changed = false; for (const k of [...selected]) { if (bookedSet.has(k)) { selected.delete(k); changed = true; } } if (changed) updateBar();
+  let changed = false; 
+  for (const k of [...selected]) { 
+      if (bookedSet.has(k)) { 
+          selected.delete(k); 
+          changed = true; 
+      } 
+  } 
+  if (changed) updateBar();
+
   document.querySelectorAll('.seat').forEach(btn => {
-    const key = btn.dataset.key; const isBlocked = bookedSet.has(key + '_blocked'); const isBooked = bookedSet.has(key) && !isBlocked;
-    if (isBlocked) { if (!btn.classList.contains('blocked')) { btn.classList.add('blocked'); btn.classList.remove('booked'); } } else if (isBooked) { if (!btn.classList.contains('booked')) { btn.classList.add('booked'); btn.classList.remove('blocked'); } } else { if (btn.classList.contains('booked') || btn.classList.contains('blocked')) btn.classList.remove('booked', 'blocked'); }
+    const key = btn.dataset.key; 
+    const isBlocked = bookedSet.has(key + '_blocked'); 
+    const isBooked = bookedSet.has(key) && !isBlocked;
+    const isSelected = selected.has(key);
+
+    if (isBlocked) {
+        btn.classList.add('blocked'); btn.classList.remove('booked', 'selected');
+    } else if (isBooked) {
+        btn.classList.add('booked'); btn.classList.remove('blocked', 'selected');
+    } else if (isSelected) {
+        btn.classList.add('selected'); btn.classList.remove('booked', 'blocked');
+    } else {
+        btn.classList.remove('booked', 'blocked', 'selected');
+    }
   });
   updateStats();
 }
@@ -655,25 +675,15 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
     
     if (!res.ok) { 
         if (data.code === 'SEATS_TAKEN') {
-            const taken = data.takenSeats || [];
-            const takenFormatted = taken.map(k => formatSeatKey(k)).join(', ');
-            
-            // Убираем только занятые места из выбора
-            for (const k of taken) {
-                selected.delete(k);
-                const btn = document.querySelector(`.seat[data-key="${k}"]`);
-                if (btn) {
-                    btn.classList.remove('selected');
-                    btn.classList.add('booked'); // Сразу делаем красным
-                }
-            }
-            
-            updateBar();
             document.getElementById('modal').hidden = true;
             
-            // Показываем большую модалку
+            // ГЛАВНЫЙ ФИКС: Обновляем зал с сервера, чтобы занятые места стали красными и убрались из selected
+            await loadBookings(); 
+            
+            const takenFormatted = (data.takenSeats || []).map(k => formatSeatKey(k)).join(', ');
+            
             if (selected.size > 0) {
-                showBigAlert(`Места <b>${takenFormatted}</b> только что занял кто-то другой.<br><br>Но не расстраивайтесь! Мы <b>оставили в вашем выборе</b> свободные места. Вы можете продолжить с ними или выбрать другие.`);
+                showBigAlert(`Места <b>${takenFormatted}</b> только что занял кто-то другой.<br><br>Но мы <b>оставили в вашем выборе</b> свободные места. Вы можете продолжить с ними или выбрать другие.`);
             } else {
                 showBigAlert(`Места <b>${takenFormatted}</b> только что занял кто-то другой.<br><br>Ваш выбор полностью сброшен. Пожалуйста, выберите другие свободные места.`);
             }
