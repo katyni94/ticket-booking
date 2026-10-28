@@ -69,7 +69,7 @@ app.get('/api/bookings', async (req, res) => {
   try { const { rows } = await pool.query('SELECT seat_key, status FROM bookings'); res.json(rows); } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
-// БАЗА КЛИЕНТОВ (API)
+// === БАЗА КЛИЕНТОВ ===
 app.get('/api/auth/check-phone', async (req, res) => {
   const phone = normPhone(req.query.phone);
   if (!phone) return res.status(400).json({ error: 'Введите телефон' });
@@ -77,13 +77,6 @@ app.get('/api/auth/check-phone', async (req, res) => {
     const { rows } = await pool.query('SELECT * FROM users WHERE RIGHT(REGEXP_REPLACE(phone, \'[^0-9]\', \'\', \'g\'), 10) = $1', [phone]);
     if (rows.length === 0) return res.status(404).json({ error: 'Номер не найден в базе. Обратитесь к администратору.' });
     res.json({ found: true, user: rows[0] });
-  } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
-});
-
-app.get('/api/groups', async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT DISTINCT group_name FROM users WHERE group_name IS NOT NULL AND group_name != \'\'');
-    res.json(rows.map(r => r.group_name));
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
@@ -109,7 +102,7 @@ app.delete('/api/admin/users', async (req, res) => {
   res.json({ ok: true });
 });
 
-// БРОНИРОВАНИЕ
+// === БРОНИРОВАНИЕ ===
 app.post('/api/bookings', rateLimit(60000, 15), async (req, res) => {
   const { seats, phone, reserveFirstname, reserveLastname, groupName, adminPass, ignoreLimit } = req.body || {};
   if (!Array.isArray(seats) || seats.length === 0) return res.status(400).json({ error: 'Не выбраны места' });
@@ -155,35 +148,31 @@ app.post('/api/bookings', rateLimit(60000, 15), async (req, res) => {
   } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: 'Ошибка бронирования' }); } finally { client.release(); }
 });
 
-// ОСТАЛЬНЫЕ API
+// === ОСТАЛЬНЫЕ API ===
 app.get('/api/my-tickets', async (req, res) => {
-  const { firstname, lastname, phone } = req.query;
-  const digits = normPhone(phone);
+  const { phone } = req.query; const digits = normPhone(phone);
   if (digits.length < 10) return res.status(400).json({ error: 'Введите телефон' });
   try {
-    const { rows } = await pool.query(`SELECT seat_key, firstname, lastname, phone, reserve_firstname, reserve_lastname, status, is_admin_booking, group_name FROM bookings WHERE (LOWER(firstname)=LOWER($1) AND LOWER(lastname)=LOWER($2) AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $3) OR (LOWER(reserve_firstname)=LOWER($1) AND LOWER(reserve_lastname)=LOWER($2)) AND status='booked' ORDER BY seat_key`, [firstname.trim(), lastname.trim(), digits]);
+    const { rows } = await pool.query(`SELECT seat_key, firstname, lastname, phone, reserve_firstname, reserve_lastname, status, is_admin_booking, group_name FROM bookings WHERE RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $1 AND status='booked' ORDER BY seat_key`, [digits]);
     res.json(rows);
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
 app.post('/api/cancel', async (req, res) => {
-  const { seats, firstname, lastname, phone } = req.body || {};
-  const digits = normPhone(phone);
-  if (!firstname || !lastname || digits.length < 10) return res.status(400).json({ error: 'Введите данные' });
+  const { seats, phone } = req.body || {}; const digits = normPhone(phone);
+  if (digits.length < 10) return res.status(400).json({ error: 'Введите телефон' });
   try {
-    const result = await pool.query(`DELETE FROM bookings WHERE seat_key = ANY($1) AND LOWER(firstname)=LOWER($2) AND LOWER(lastname)=LOWER($3) AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $4 AND status='booked'`, [seats, firstname.trim(), lastname.trim(), digits]);
+    const result = await pool.query(`DELETE FROM bookings WHERE seat_key = ANY($1) AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $2 AND status='booked'`, [seats, digits]);
     res.json({ ok: true, deleted: result.rowCount });
   } catch (err) { res.status(500).json({ error: 'Ошибка отмены' }); }
 });
 
 app.get('/api/admin/person-summary', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Нет доступа' });
-  const { firstname, lastname, phone } = req.query; const digits = normPhone(phone);
+  const { phone } = req.query; const digits = normPhone(phone);
   try {
-    const params = digits ? [firstname.trim(), lastname.trim(), digits] : [firstname.trim(), lastname.trim()];
-    const baseWhere = `WHERE (LOWER(firstname)=LOWER($1) AND LOWER(lastname)=LOWER($2) ${digits ? 'AND RIGHT(REGEXP_REPLACE(phone, \'[^0-9]\', \'\', \'g\'), 10) = $3' : ''}) AND status='booked'`;
-    const total = parseInt((await pool.query(`SELECT COUNT(*) as c FROM bookings ${baseWhere}`, params)).rows[0].c, 10);
-    const limited = parseInt((await pool.query(`SELECT COUNT(*) as c FROM bookings ${baseWhere} AND COALESCE(is_admin_booking, false) = false`, params)).rows[0].c, 10);
+    const total = parseInt((await pool.query(`SELECT COUNT(*) as c FROM bookings WHERE RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $1 AND status='booked'`, [digits])).rows[0].c, 10);
+    const limited = parseInt((await pool.query(`SELECT COUNT(*) as c FROM bookings WHERE RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $1 AND status='booked' AND COALESCE(is_admin_booking, false) = false`, [digits])).rows[0].c, 10);
     res.json({ total, limited, admin: total - limited, max: appSettings.maxSeats, left: Math.max(0, appSettings.maxSeats - limited) });
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
@@ -214,15 +203,11 @@ app.post('/api/admin/force-cancel', async (req, res) => {
   await pool.query('DELETE FROM bookings WHERE seat_key = $1', [req.body.seat]); res.json({ ok: true });
 });
 
-// МАССОВОЕ СНЯТИЕ БРОНЕЙ (АДМИН)
 app.post('/api/admin/bulk-force-cancel', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Нет доступа' });
   const { seats } = req.body;
   if (!seats || !seats.length) return res.status(400).json({ error: 'Не выбраны места' });
-  try {
-    await pool.query('DELETE FROM bookings WHERE seat_key = ANY($1)', [seats]);
-    res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
+  try { await pool.query('DELETE FROM bookings WHERE seat_key = ANY($1)', [seats]); res.json({ ok: true }); } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
 app.post('/api/admin/edit-booking', async (req, res) => {
@@ -230,6 +215,17 @@ app.post('/api/admin/edit-booking', async (req, res) => {
   const { seat, firstname, lastname, phone, group_name, reserve_firstname, reserve_lastname, is_admin_booking } = req.body;
   await pool.query(`UPDATE bookings SET firstname=$1, lastname=$2, phone=$3, group_name=$4, reserve_firstname=$5, reserve_lastname=$6, is_admin_booking = COALESCE($7, is_admin_booking) WHERE seat_key=$8`, [firstname, lastname, phone, group_name, reserve_firstname, reserve_lastname, (typeof is_admin_booking === 'boolean' ? is_admin_booking : null), seat]);
   res.json({ ok: true });
+});
+
+app.post('/api/admin/bulk-edit', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
+  const { oldPhone, newFirstname, newLastname, newPhone } = req.body;
+  if (!oldPhone || !newFirstname || !newLastname || !newPhone) return res.status(400).json({ error: 'Заполните все поля' });
+  try {
+    const normOldPhone = oldPhone.replace(/\D/g, '').slice(-10);
+    const result = await pool.query(`UPDATE bookings SET firstname = $1, lastname = $2, phone = $3 WHERE RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $4 AND status = 'booked'`, [newFirstname, newLastname, newPhone, normOldPhone]);
+    res.json({ ok: true, updated: result.rowCount });
+  } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
 app.get('/api/admin/duplicates', async (req, res) => {
@@ -256,6 +252,25 @@ app.get('/api/admin/export', async (req, res) => {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="tickets.xlsx"');
     await workbook.xlsx.write(res); res.end();
+  } catch (err) { res.status(500).send('Ошибка'); }
+});
+
+app.get('/api/admin/export-word', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
+  try {
+    const { rows: booked } = await pool.query("SELECT * FROM bookings WHERE status = 'booked' ORDER BY created_at ASC");
+    let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><style>body{font-family:Arial;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #000;padding:5px;}</style></head><body><h1>Билеты</h1><table><tr><th>Зона</th><th>Ряд</th><th>Место</th><th>Фамилия</th><th>Имя</th><th>Телефон</th><th>Группа</th></tr>`;
+    booked.forEach(b => {
+      let zoneName = 'Балкон'; let row = 0, seat = 0;
+      if (b.seat_key.startsWith('parterre-')) { zoneName = 'Партер'; const p = b.seat_key.split('-'); row = +p[1]; seat = +p[2]; }
+      else if (b.seat_key.startsWith('central-')) { zoneName = 'Центр. балкон'; const p = b.seat_key.split('-'); row = +p[1]; seat = +p[2]; }
+      else if (b.seat_key.startsWith('balc-')) { const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; zoneName = b.seat_key.includes('left') ? 'Левый балкон' : 'Правый балкон'; }
+      html += `<tr><td>${zoneName}</td><td>${row}</td><td>${seat}</td><td>${b.lastname}</td><td>${b.firstname}</td><td>${b.phone}</td><td>${b.group_name || ''}</td></tr>`;
+    });
+    html += `</table></body></html>`;
+    res.setHeader('Content-Type', 'application/msword');
+    res.setHeader('Content-Disposition', 'attachment; filename="tickets.doc"');
+    res.send(html);
   } catch (err) { res.status(500).send('Ошибка'); }
 });
 
