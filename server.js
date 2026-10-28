@@ -15,7 +15,7 @@ const pool = new Pool({
   max: 25, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000, statement_timeout: 15000, query_timeout: 15000
 });
 
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '10mb' })); // Увеличили лимит для загрузки Excel
 app.use(express.static(path.join(__dirname, 'public')));
 
 const rateLimitStore = new Map();
@@ -47,7 +47,7 @@ async function initDB() {
       is_admin_booking BOOLEAN DEFAULT false, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`);
     await pool.query(`CREATE TABLE IF NOT EXISTS users (
-      phone VARCHAR(30) PRIMARY KEY, firstname VARCHAR(50) NOT NULL, lastname VARCHAR(50) NOT NULL, group_name VARCHAR(100)
+      phone VARCHAR(30) PRIMARY KEY, firstname VARCHAR(50) NOT NULL, lastname VARCHAR(50) NOT NULL, group_name VARCHAR(100) NOT NULL
     )`);
     await pool.query(`CREATE TABLE IF NOT EXISTS settings (key VARCHAR(50) PRIMARY KEY, value JSONB)`);
     
@@ -86,6 +86,31 @@ app.get('/api/admin/users', async (req, res) => {
   res.json(rows);
 });
 
+// Загрузка базы списком
+app.post('/api/admin/bulk-users', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Нет доступа' });
+  const { users } = req.body;
+  if (!Array.isArray(users) || users.length === 0) return res.status(400).json({ error: 'Список пуст' });
+  
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const u of users) {
+      if (!u.firstname || !u.lastname || !u.phone || !u.group_name) continue;
+      await client.query(
+        `INSERT INTO users (phone, firstname, lastname, group_name) VALUES ($1, $2, $3, $4) 
+         ON CONFLICT (phone) DO UPDATE SET firstname=$2, lastname=$3, group_name=$4`, 
+        [u.phone.trim(), u.firstname.trim(), u.lastname.trim(), u.group_name.trim()]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ ok: true, count: users.length });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Ошибка БД: ' + err.message });
+  } finally { client.release(); }
+});
+
 app.post('/api/admin/users', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Нет доступа' });
   const { firstname, lastname, phone, group_name } = req.body;
@@ -102,11 +127,12 @@ app.delete('/api/admin/users', async (req, res) => {
   res.json({ ok: true });
 });
 
-// === БРОНИРОВАНИЕ ===
+// === БРОНИРОВАНИЕ (С УЧЕТОМ РЕЗЕРВА ПО ФИО) ===
 app.post('/api/bookings', rateLimit(60000, 15), async (req, res) => {
   const { seats, phone, reserveFirstname, reserveLastname, groupName, adminPass, ignoreLimit } = req.body || {};
   if (!Array.isArray(seats) || seats.length === 0) return res.status(400).json({ error: 'Не выбраны места' });
   if (seats.length > 20) return res.status(400).json({ error: 'Слишком много мест' });
+  
   const digits = normPhone(phone);
   if (digits.length < 10) return res.status(400).json({ error: 'Введите корректный телефон' });
 
@@ -121,31 +147,64 @@ app.post('/api/bookings', rateLimit(60000, 15), async (req, res) => {
   const isAdmin = (adminPass === ADMIN_PASSWORD);
   const useLimit = isAdmin ? (ignoreLimit !== true) : true;
   const isAdminBooking = isAdmin && !useLimit;
+  
   const rFName = reserveFirstname ? reserveFirstname.trim() : null;
   const rLName = reserveLastname ? reserveLastname.trim() : null;
   if ((rFName && !rLName) || (!rFName && rLName)) return res.status(400).json({ error: 'Для резерва нужно ввести и имя, и фамилию' });
 
+  // Определяем, на кого считать лимит
+  let limitPhone = phone.trim();
+  let limitFName = fName;
+  let limitLName = lName;
+
+  if (rFName && rLName) {
+    try {
+      const rUserRes = await pool.query('SELECT phone, firstname, lastname FROM users WHERE LOWER(lastname) = LOWER($1) AND LOWER(firstname) = LOWER($2)', [rLName, rFName]);
+      if (rUserRes.rows.length === 0) {
+        return res.status(400).json({ error: `Резерв ${rFName} ${rLName} не найден в базе клиентов. Проверьте написание.` });
+      }
+      limitPhone = rUserRes.rows[0].phone;
+      limitFName = rUserRes.rows[0].firstname;
+      limitLName = rUserRes.rows[0].lastname;
+    } catch (e) { return res.status(500).json({ error: 'Ошибка поиска резерва' }); }
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('SELECT pg_advisory_xact_lock(1, hashtext($1))', [`user:${fName}:${lName}:${digits}`]);
+    await client.query('SELECT pg_advisory_xact_lock(1, hashtext($1))', [`user:${limitFName}:${limitLName}:${normPhone(limitPhone)}`]);
+    
     const { rows: existing } = await client.query('SELECT seat_key FROM bookings WHERE seat_key = ANY($1)', [seats]);
     if (existing.length > 0) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Места уже заняты', code: 'SEATS_TAKEN' }); }
 
     if (useLimit) {
-      const { rows: userRows } = await client.query(`SELECT COUNT(*) as count FROM bookings WHERE (LOWER(firstname)=LOWER($1) AND LOWER(lastname)=LOWER($2) AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $3) OR (LOWER(reserve_firstname)=LOWER($1) AND LOWER(reserve_lastname)=LOWER($2)) AND status='booked' AND COALESCE(is_admin_booking, false) = false`, [fName, lName, digits]);
+      const { rows: userRows } = await client.query(
+        `SELECT COUNT(*) as count FROM bookings 
+         WHERE (LOWER(firstname)=LOWER($1) AND LOWER(lastname)=LOWER($2) AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $3) 
+         AND status='booked' AND COALESCE(is_admin_booking, false) = false`, 
+        [limitFName, limitLName, normPhone(limitPhone)]
+      );
       const userUsed = parseInt(userRows[0].count, 10);
       if (userUsed + seats.length > appSettings.maxSeats) {
-        await client.query('ROLLBACK'); return res.status(409).json({ error: `У вас уже занято ${userUsed} из ${appSettings.maxSeats} мест.`, code: 'LIMIT_EXCEEDED' });
+        await client.query('ROLLBACK'); 
+        return res.status(409).json({ error: `У ${limitFName} ${limitLName} уже занято ${userUsed} из ${appSettings.maxSeats} мест.`, code: 'LIMIT_EXCEEDED' });
       }
     }
 
     for (const seat of seats) {
-      const r = await client.query(`INSERT INTO bookings (seat_key, firstname, lastname, phone, reserve_firstname, reserve_lastname, group_name, status, is_admin_booking) VALUES ($1, $2, $3, $4, $5, $6, $7, 'booked', $8) ON CONFLICT (seat_key) DO NOTHING RETURNING seat_key`, [seat, fName, lName, phone.trim(), rFName, rLName, userGroup, isAdminBooking]);
+      const r = await client.query(
+        `INSERT INTO bookings (seat_key, firstname, lastname, phone, reserve_firstname, reserve_lastname, group_name, status, is_admin_booking) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'booked', $8) ON CONFLICT (seat_key) DO NOTHING RETURNING seat_key`, 
+        [seat, fName, lName, phone.trim(), rFName, rLName, userGroup, isAdminBooking]
+      );
       if (r.rowCount === 0) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Место занято', code: 'SEATS_TAKEN' }); }
     }
-    await client.query('COMMIT'); res.json({ ok: true });
-  } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: 'Ошибка бронирования' }); } finally { client.release(); }
+    await client.query('COMMIT'); 
+    res.json({ ok: true });
+  } catch (err) { 
+    await client.query('ROLLBACK'); 
+    res.status(500).json({ error: 'Ошибка бронирования' }); 
+  } finally { client.release(); }
 });
 
 // === ОСТАЛЬНЫЕ API ===
@@ -203,11 +262,27 @@ app.post('/api/admin/force-cancel', async (req, res) => {
   await pool.query('DELETE FROM bookings WHERE seat_key = $1', [req.body.seat]); res.json({ ok: true });
 });
 
-app.post('/api/admin/bulk-force-cancel', async (req, res) => {
-  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Нет доступа' });
-  const { seats } = req.body;
-  if (!seats || !seats.length) return res.status(400).json({ error: 'Не выбраны места' });
-  try { await pool.query('DELETE FROM bookings WHERE seat_key = ANY($1)', [seats]); res.json({ ok: true }); } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
+// Группировка по людям для массового снятия
+app.get('/api/admin/bookings-by-users', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
+  try {
+    const { rows } = await pool.query(`
+      SELECT phone, firstname, lastname, COUNT(*) as seat_count, STRING_AGG(seat_key, ', ') as seats
+      FROM bookings WHERE status = 'booked'
+      GROUP BY phone, firstname, lastname ORDER BY lastname, firstname
+    `);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
+});
+
+app.post('/api/admin/bulk-cancel-users', async (req, res) => {
+  if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Доступ запрещен' });
+  const { phones } = req.body;
+  if (!phones || !phones.length) return res.status(400).json({ error: 'Никто не выбран' });
+  try {
+    await pool.query(`DELETE FROM bookings WHERE RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = ANY($1) AND status = 'booked'`, [phones]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
 app.post('/api/admin/edit-booking', async (req, res) => {
