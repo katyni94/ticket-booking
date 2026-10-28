@@ -338,10 +338,10 @@ const centralStrings = ["--------000000000000000000000000000-------------","----
 const centralMaxSeats = [27, 28, 30, 31, 28];
 const tanci_parterre = { 1: [19, 39], 2: [18, 37], 3: [18, 37], 4: [17, 35], 5: [10, 20], 6: [17, 35], 7: [15, 31], 8: [16, 33], 9: [15, 32], 10: [14, 30], 11: [14, 30], 12: [14, 29], 13: [14, 29], 14: [14, 29], 15: [14, 29], 16: [14, 28], 17: [14, 28], 18: [13, 27], 19: [11, 19], 20: [11, 19], 21: [11, 19], 22: [15, 30], 23: [10, 20], 24: [9, 17], 25: [10, 19] };
 const tanci_central = { 1: [14, 27], 2: [14, 28], 3: [15, 30], 4: [16, 31], 5: [15, 28] };
-const leftBalcAConf = [{ rowNum: 4, present: (r) => r >= 2 }, { rowNum: 3, present: (r) => r >= 1 }, { rowNum: 2, present: (r) => r >= 1 }, { rowNum: 1, present: () => true }];
-const rightBalcAConf = [{ rowNum: 1, present: () => true }, { rowNum: 2, present: (r) => r >= 1 }, { rowNum: 3, present: () => true }, { rowNum: 4, present: (r) => r >= 1 }];
-const leftBalcBConf = [{ rowNum: 2, present: (r) => r >= 1 }, { rowNum: 1, present: () => true }];
-const rightBalcBConf = [{ rowNum: 1, present: () => true }, { rowNum: 2, present: (r) => r >= 1 }];
+const leftBalcAConf = [{ rowNum: 4, present: (s) => s >= 2 }, { rowNum: 3, present: (s) => s >= 1 }, { rowNum: 2, present: (s) => s >= 1 }, { rowNum: 1, present: () => true }];
+const rightBalcAConf = [{ rowNum: 1, present: () => true }, { rowNum: 2, present: (s) => s >= 1 }, { rowNum: 3, present: () => true }, { rowNum: 4, present: (s) => s >= 1 }];
+const leftBalcBConf = [{ rowNum: 2, present: (s) => s >= 1 }, { rowNum: 1, present: () => true }];
+const rightBalcBConf = [{ rowNum: 1, present: () => true }, { rowNum: 2, present: (s) => s >= 1 }];
 
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('side') === 'left') forcedSideMode = 'left'; if (urlParams.get('side') === 'right') forcedSideMode = 'right';
@@ -357,21 +357,20 @@ function switchEvent(event) { if (forcedSideMode) return; if (priceSettings.hidd
 
 function renderBalcony(containerId, config, maxSeats, zoneName, side, balcId) {
   const container = document.getElementById(containerId); if (!container) return; container.innerHTML = '';
-  const sortedRows = [...config].sort((a, b) => b.rowNum - a.rowNum);
   
-  sortedRows.forEach((rowConf) => {
+  config.forEach((rowConf) => {
     const rowDiv = document.createElement('div'); rowDiv.className = 'row';
     const rl = document.createElement('div'); rl.className = 'row-number'; rl.textContent = rowConf.rowNum; rowDiv.appendChild(rl);
     
-    let emptyLeft = 0;
-    while(!rowConf.present(emptyLeft)) { emptyLeft++; }
-    
-    for(let i = 0; i < emptyLeft; i++) { const a = document.createElement('div'); a.className = 'aisle'; a.style.width = '20px'; rowDiv.appendChild(a); }
-    for (let s = maxSeats - emptyLeft; s >= 1; s--) {
-      const zoneKey = `balc-${side}-${balcId}`;
-      const { price, color } = getPriceAndColor(zoneKey, side, rowConf.rowNum, s);
-      const key = `${zoneKey}-${rowConf.rowNum}-${s}`;
-      rowDiv.appendChild(createSeat(key, s, color, price, side, zoneName, rowConf.rowNum));
+    for (let s = maxSeats; s >= 1; s--) {
+      if (rowConf.present(s)) {
+        const zoneKey = `balc-${side}-${balcId}`;
+        const { price, color } = getPriceAndColor(zoneKey, side, rowConf.rowNum, s);
+        const key = `${zoneKey}-${rowConf.rowNum}-${s}`;
+        rowDiv.appendChild(createSeat(key, s, color, price, side, zoneName, rowConf.rowNum));
+      } else {
+        const a = document.createElement('div'); a.className = 'aisle'; a.style.width = '20px'; rowDiv.appendChild(a);
+      }
     }
     container.appendChild(rowDiv);
   });
@@ -741,38 +740,38 @@ async function checkDuplicates() {
   document.getElementById('duplicatesModal').hidden = false;
 }
 
-// ВОССТАНОВЛЕНИЕ ПЕРЕКЛЮЧЕНИЯ РЕЖИМОВ АДМИНКИ
 const adminModeSelect = document.getElementById('adminModeSelect');
-adminModeSelect.addEventListener('change', (e) => {
-    adminActionMode = e.target.value;
-    adminModeSelect.classList.remove('mode-book', 'mode-paint', 'mode-manage');
-    paintStart = null; document.querySelectorAll('.painting').forEach(el => el.classList.remove('painting'));
-    
-    if (adminActionMode === 'book') { 
-        adminModeSelect.classList.add('mode-book'); 
-        document.getElementById('paintPalette').style.display = 'none'; 
-        showToast('Режим: Бронирование на клиента'); 
-    }
-    else if (adminActionMode === 'paint') { 
-        adminModeSelect.classList.add('mode-paint'); 
-        document.getElementById('paintPalette').style.display = 'flex'; 
-        showToast('Режим: Категории цен'); 
-    }
-    else if (adminActionMode === 'manage') { 
-        adminModeSelect.classList.add('mode-manage'); 
-        document.getElementById('paintPalette').style.display = 'none'; 
-        showToast('Режим: Управление бронями'); 
-    }
-    else { 
-        document.getElementById('paintPalette').style.display = 'none'; 
-        showToast('Режим: Блокировка мест'); 
-    }
-});
+if(adminModeSelect) {
+    adminModeSelect.addEventListener('change', (e) => {
+        adminActionMode = e.target.value;
+        adminModeSelect.classList.remove('mode-book', 'mode-paint', 'mode-manage');
+        paintStart = null; document.querySelectorAll('.painting').forEach(el => el.classList.remove('painting'));
+        
+        if (adminActionMode === 'book') { 
+            adminModeSelect.classList.add('mode-book'); 
+            document.getElementById('paintPalette').style.display = 'none'; 
+            showToast('Режим: Бронирование на клиента'); 
+        }
+        else if (adminActionMode === 'paint') { 
+            adminModeSelect.classList.add('mode-paint'); 
+            document.getElementById('paintPalette').style.display = 'flex'; 
+            showToast('Режим: Категории цен'); 
+        }
+        else if (adminActionMode === 'manage') { 
+            adminModeSelect.classList.add('mode-manage'); 
+            document.getElementById('paintPalette').style.display = 'none'; 
+            showToast('Режим: Управление бронями'); 
+        }
+        else { 
+            document.getElementById('paintPalette').style.display = 'none'; 
+            showToast('Режим: Блокировка мест'); 
+        }
+    });
+}
 
 let toastTimer;
 function showToast(msg, type = 'success') { const toast = document.getElementById('toast'); toast.textContent = msg; toast.className = 'toast show ' + (type === 'error' ? 'error' : ''); clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.classList.remove('show'); }, 3000); }
 
-// Восстанавливаем сессию админа
 if (localStorage.getItem('hall_admin') === 'true') {
     isAdminMode = true;
     document.body.classList.add('admin-mode');
