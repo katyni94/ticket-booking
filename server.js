@@ -211,14 +211,13 @@ app.post('/api/bookings', rateLimit(60000, 20), async (req, res) => {
     await client.query('BEGIN');
     await client.query('SELECT pg_advisory_xact_lock(1, hashtext($1))', [`user:${normPhone(limitPhone)}`]);
     
-    // Ищем занятые места
     const { rows: existing } = await client.query('SELECT seat_key FROM bookings WHERE seat_key = ANY($1)', [seats]);
     if (existing.length > 0) { 
         await client.query('ROLLBACK'); 
         return res.status(409).json({ 
             error: 'Места уже заняты', 
             code: 'SEATS_TAKEN',
-            takenSeats: existing.map(r => r.seat_key) // Возвращаем список занятых мест
+            takenSeats: existing.map(r => r.seat_key)
         }); 
     }
 
