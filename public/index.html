@@ -339,7 +339,7 @@ const centralMaxSeats = [27, 28, 30, 31, 28];
 const tanci_parterre = { 1: [19, 39], 2: [18, 37], 3: [18, 37], 4: [17, 35], 5: [10, 20], 6: [17, 35], 7: [15, 31], 8: [16, 33], 9: [15, 32], 10: [14, 30], 11: [14, 30], 12: [14, 29], 13: [14, 29], 14: [14, 29], 15: [14, 29], 16: [14, 28], 17: [14, 28], 18: [13, 27], 19: [11, 19], 20: [11, 19], 21: [11, 19], 22: [15, 30], 23: [10, 20], 24: [9, 17], 25: [10, 19] };
 const tanci_central = { 1: [14, 27], 2: [14, 28], 3: [15, 30], 4: [16, 31], 5: [15, 28] };
 
-// ТОЧНАЯ КОПИЯ ИЗ ТВОЕГО КОДА
+// ИСХОДНЫЕ КОНФИГИ БАЛКОНОВ (БЕЗ ИЗМЕНЕНИЙ)
 const leftBalcAConf = [ { rowNum: 4, present: (r) => r >= 2 }, { rowNum: 3, present: (r) => r >= 1 }, { rowNum: 2, present: (r) => r >= 1 }, { rowNum: 1, present: () => true } ];
 const rightBalcAConf = [ { rowNum: 1, present: () => true }, { rowNum: 2, present: (r) => r >= 1 }, { rowNum: 3, present: () => true }, { rowNum: 4, present: (r) => r >= 1 } ];
 const leftBalcBConf = [ { rowNum: 2, present: (r) => r >= 1 }, { rowNum: 1, present: () => true } ];
@@ -357,14 +357,11 @@ function getPriceAndColor(zone, side, row, seatNum) { if (priceSettings.rules) {
 function createSeat(key, num, color, price, side, zoneName, rowNum) { const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'seat'; btn.dataset.key = key; btn.dataset.side = side; btn.dataset.zone = zoneName; btn.dataset.row = rowNum; btn.dataset.seat = num; btn.dataset.price = price; btn.textContent = num; btn.style.background = color; btn.dataset.color = color; if (side !== currentEvent) btn.classList.add('disabled'); if (bookedSet.has(key)) { if (bookedSet.has(key + '_blocked')) btn.classList.add('blocked'); else btn.classList.add('booked'); } if (selected.has(key)) btn.classList.add('selected'); return btn; }
 function switchEvent(event) { if (forcedSideMode) return; if (priceSettings.hidden && priceSettings.hidden[event]) return; currentEvent = event; document.getElementById('btn-event-left').classList.toggle('active', event === 'left'); document.getElementById('btn-event-right').classList.toggle('active', event === 'right'); render(); }
 
-// ТОЧНАЯ ФУНКЦИЯ ИЗ ТВОЕГО КОДА + НОМЕР РЯДА
+// ВОЗВРАЩЕННАЯ ФУНКЦИЯ БЕЗ НОМЕРОВ РЯДОВ НА БАЛКОНАХ
 function renderBalcony(containerId, config, totalSeats, zoneName, side, balcId) {
   const container = document.getElementById(containerId); if (!container) return; container.innerHTML = '';
   for (let r = 0; r < totalSeats; r++) {
     const rowDiv = document.createElement('div'); rowDiv.className = 'row'; const seatNum = totalSeats - r;
-    
-    const rl = document.createElement('div'); rl.className = 'row-number'; rl.textContent = r + 1; rowDiv.appendChild(rl);
-
     for (let c = 0; c < config.length; c++) {
       const colConf = config[c];
       if (colConf.present(r)) {
@@ -378,6 +375,7 @@ function renderBalcony(containerId, config, totalSeats, zoneName, side, balcId) 
   }
 }
 
+// ФУНКЦИЯ ДЛЯ ПАРТЕРА И ЦЕНТРА (С НОМЕРАМИ РЯДОВ)
 function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isParterre = false) {
   const container = document.getElementById(containerId); if (!container) return; container.innerHTML = '';
   gridData.forEach((rowData, rowIndex) => {
