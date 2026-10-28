@@ -73,6 +73,10 @@
   .toast.show{opacity:1; transform:translate(-50%, -50%) scale(1);}
   .toast.error { background: #8b1c1c; }
   
+  /* ЖЕЛЕЗОБЕТОННЫЙ ФИКС ЭКРАНА ЗАГРУЗКИ */
+  #loadingOverlay { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; justify-content: center; align-items: center; font-size: 18px; color: var(--text); transition: opacity 0.3s; }
+  #loadingOverlay.hidden { display: none !important; opacity: 0; pointer-events: none; }
+
   @media (max-width: 768px) {
     body { padding: 10px 5px 300px; }
     body.admin-mode { padding-right: 0; overflow: hidden; }
@@ -89,7 +93,7 @@
 </head>
 <body>
 
-<div id="loadingOverlay" style="position:fixed; inset:0; background:var(--bg); z-index:9999; display:flex; justify-content:center; align-items:center;">Загрузка...</div>
+<div id="loadingOverlay">Загрузка...</div>
 
 <h1>Концертный зал</h1>
 <div class="sub">25 ноября в 19:00</div>
@@ -414,7 +418,9 @@ function selectPaint(color) { activePaint = color; document.querySelectorAll('.p
 async function fetchWithRetry(url, options, retries = 3, delay = 2000) { for (let i = 0; i < retries; i++) { try { const res = await fetch(url, options); if (res.ok) return res; if (res.status >= 400 && res.status < 500) return res; } catch (e) {} await new Promise(r => setTimeout(r, delay)); } throw new Error('Сетевая ошибка'); }
 
 async function loadSettings() {
-  try { const res = await fetchWithRetry('/api/settings'); priceSettings = await res.json(); CURRENT_MAX_SEATS = priceSettings.maxSeats || 4; if (priceSettings.bgUrl) document.documentElement.style.setProperty('--bg-image', `url('${priceSettings.bgUrl}')`); render(); document.getElementById('loadingOverlay').classList.add('hidden'); } catch (e) { render(); document.getElementById('loadingOverlay').classList.add('hidden'); }
+  try { const res = await fetchWithRetry('/api/settings'); priceSettings = await res.json(); CURRENT_MAX_SEATS = priceSettings.maxSeats || 4; if (priceSettings.bgUrl) document.documentElement.style.setProperty('--bg-image', `url('${priceSettings.bgUrl}')`); render(); } 
+  catch (e) { console.error('Ошибка настроек:', e); render(); } 
+  finally { document.getElementById('loadingOverlay').classList.add('hidden'); }
 }
 async function saveSettings() {
   const newMax = Number(document.getElementById('set-max-seats').value) || 4;
@@ -424,7 +430,9 @@ async function saveSettings() {
   showToast('Настройки сохранены');
 }
 async function loadBookings() {
-  try { const res = await fetchWithRetry('/api/bookings', { cache: 'no-store' }); const data = await res.json(); bookedSet.clear(); if (Array.isArray(data)) data.forEach(i => { if (typeof i === 'string') bookedSet.add(i); else { bookedSet.add(i.seat_key); if (i.status === 'blocked') bookedSet.add(i.seat_key + '_blocked'); } }); updateSeatsUI(); document.getElementById('loadingOverlay').classList.add('hidden'); } catch (e) { render(); document.getElementById('loadingOverlay').classList.add('hidden'); }
+  try { const res = await fetchWithRetry('/api/bookings', { cache: 'no-store' }); const data = await res.json(); bookedSet.clear(); if (Array.isArray(data)) data.forEach(i => { if (typeof i === 'string') bookedSet.add(i); else { bookedSet.add(i.seat_key); if (i.status === 'blocked') bookedSet.add(i.seat_key + '_blocked'); } }); updateSeatsUI(); } 
+  catch (e) { console.error('Ошибка броней:', e); } 
+  finally { document.getElementById('loadingOverlay').classList.add('hidden'); }
 }
 
 document.body.addEventListener('click', async e => {
