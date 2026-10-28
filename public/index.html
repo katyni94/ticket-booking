@@ -129,7 +129,11 @@
   </div>
   
   <div style="display:flex; flex-direction:column; gap:10px; margin-bottom: 5px;">
-    <button class="btn primary" style="width: 100%; background:#22c55e; padding: 12px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD, '_blank')">📥 Скачать Excel (Брони)</button>
+    <button class="btn primary" style="width: 100%; background:#22c55e; padding: 12px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD + '&side=all', '_blank')">📥 Скачать Excel (Всё)</button>
+    <div style="display:flex; gap:5px;">
+        <button class="btn ghost" style="flex:1; font-size:11px; padding:8px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD + '&side=left', '_blank')">Левая</button>
+        <button class="btn ghost" style="flex:1; font-size:11px; padding:8px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD + '&side=right', '_blank')">Правая</button>
+    </div>
   </div>
 
   <details class="sidebar-section" open>
@@ -239,7 +243,6 @@
     <p class="modal-seats" id="modalSeats" style="color:var(--muted); font-size:13px; white-space:pre-line;"></p>
     <form id="bookingForm" novalidate>
       
-      <!-- НОВЫЙ БЛОК ДЛЯ АДМИНА -->
       <div id="adminManualBlock" style="display:none; background:#1f2937; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #eab308;">
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; margin:0; color:#eab308;">
           <input type="checkbox" id="manualBookingCheckbox" onchange="toggleManualBooking()" style="width:18px; height:18px; margin:0;">
@@ -259,11 +262,10 @@
       </label>
       
       <div id="userInfoBox" style="display:none; background:#1f2937; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #3b82f6;">
-        <div style="font-size:12px; color:#60a5fa; font-weight:bold; margin-bottom:5px;">Данные из базы:</div>
         <div id="userInfoText" style="font-size:13px; line-height:1.5;"></div>
       </div>
       <div id="reserveBox" style="background:#1f2937; padding:10px; border-radius:8px; margin-bottom:15px;">
-        <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Использовать чей-то резерв (Введите ФИО точно как в базе)</label>
+        <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Использовать чей-то резерв (Введите ФИО)</label>
         <div style="display:flex; gap:10px;">
           <input id="reserveLastname" type="text" placeholder="Фамилия" style="flex:1; margin:0;">
           <input id="reserveFirstname" type="text" placeholder="Имя" style="flex:1; margin:0;">
@@ -309,10 +311,32 @@
   <div class="modal-card">
     <h2 style="margin-top:0;">Управление бронью</h2>
     <div id="forceCancelInfo" style="font-size:14px; margin-bottom:20px;"></div>
-    <div style="display:flex; gap:10px; flex-wrap:wrap;">
-      <button class="btn ghost" style="flex:1" onclick="document.getElementById('forceCancelModal').hidden = true">Закрыть</button>
-      <button class="btn primary" style="flex:1; background:#ef4444;" onclick="confirmForceCancel()">Снять</button>
+    
+    <div id="editFields" style="display:none; border-top: 1px solid #333; padding-top: 15px; margin-bottom: 20px;">
+       <p style="font-size:12px; color:var(--muted); margin-top:0;">Введите телефон, чтобы перевести бронь на другого человека из базы.</p>
+       <label style="display:block; margin-bottom:10px; font-size:13px; color:var(--muted);">Телефон <input id="edit-phone" type="tel" style="margin-top:5px;" oninput="formatPhone(this)" onchange="checkEditPhone()"></label>
+       <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <label style="flex:1; font-size:13px; color:var(--muted);">Фамилия <input id="edit-lastname" type="text" style="margin-top:5px;"></label>
+        <label style="flex:1; font-size:13px; color:var(--muted);">Имя <input id="edit-firstname" type="text" style="margin-top:5px;"></label>
+      </div>
+      <label style="display:block; margin-bottom:10px; font-size:13px; color:var(--muted);">Группа <input id="edit-group" type="text" style="margin-top:5px;"></label>
+      <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <label style="flex:1; font-size:13px; color:var(--muted);">Резерв (Фамилия) <input id="edit-res-lastname" type="text" style="margin-top:5px;"></label>
+        <label style="flex:1; font-size:13px; color:var(--muted);">Резерв (Имя) <input id="edit-res-firstname" type="text" style="margin-top:5px;"></label>
+      </div>
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; margin-top:10px;">
+        <input type="checkbox" id="edit-is-admin" style="width:18px; height:18px; margin:0;">
+        🛡 Админ-бронь (не в лимите)
+      </label>
     </div>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button type="button" class="btn ghost" style="flex:1" onclick="document.getElementById('forceCancelModal').hidden = true">Закрыть</button>
+      <button type="button" class="btn primary" id="editToggleBtn" style="flex:1; background:#eab308;" onclick="toggleEditMode()">✏️ Редактировать</button>
+      <button type="button" class="btn primary" id="saveEditBtn" style="flex:1; display:none; background:#22c55e;" onclick="saveEditedBooking()">💾 Сохранить</button>
+      <button type="button" class="btn primary" style="flex:1; background:#ef4444;" onclick="confirmForceCancel()">❌ Снять бронь</button>
+    </div>
+    <p class="error" id="forceCancelError" style="color:#f87171; font-size:13px; margin-top:10px;"></p>
   </div>
 </div>
 
@@ -530,13 +554,30 @@ document.body.addEventListener('click', async e => {
   updateBar();
 });
 
+// ПРОВЕРКА ТЕЛЕФОНА В МОДАЛКЕ БРОНИРОВАНИЯ
 async function checkPhone() {
   const phone = document.getElementById('phone').value.trim();
   const box = document.getElementById('userInfoBox'); const txt = document.getElementById('userInfoText');
   if (phone.replace(/\D/g,'').length < 11) { box.style.display = 'none'; return; }
-  const res = await fetch(`/api/auth/check-phone?phone=${encodeURIComponent(phone)}`);
-  if (res.ok) { const d = await res.json(); box.style.display = 'block'; txt.innerHTML = `<b>${d.user.lastname} ${d.user.firstname}</b><br>Группа: ${d.user.group_name || 'Нет'}`; }
-  else { box.style.display = 'block'; txt.innerHTML = '<span style="color:#f87171;">❌ Номер не найден в базе!</span>'; }
+  
+  try {
+      const res = await fetch(`/api/auth/check-phone?phone=${encodeURIComponent(phone)}`);
+      if (res.ok) { 
+          const d = await res.json(); 
+          box.style.display = 'block'; 
+          
+          // Запрашиваем лимиты
+          const sumRes = await fetch(`/api/admin/person-summary?pass=${ADMIN_PASSWORD}&phone=${encodeURIComponent(phone)}`);
+          let limitText = '';
+          if (sumRes.ok) {
+              const s = await sumRes.json();
+              limitText = `<br><span style="color:#f59e0b; font-weight:bold;">Занято в лимите: ${s.limited} из ${s.max} (свободно: ${s.left})</span>`;
+          }
+          
+          txt.innerHTML = `<b>${d.user.lastname} ${d.user.firstname}</b><br>Группа: ${d.user.group_name || 'Нет'}${limitText}`; 
+      }
+      else { box.style.display = 'block'; txt.innerHTML = '<span style="color:#f87171;">❌ Номер не найден в базе!</span>'; }
+  } catch(e) { box.style.display = 'none'; }
 }
 
 document.getElementById('bookBtn').addEventListener('click', () => {
@@ -546,7 +587,6 @@ document.getElementById('bookBtn').addEventListener('click', () => {
   document.getElementById('bookingForm').reset(); 
   document.getElementById('userInfoBox').style.display = 'none';
   
-  // ЛОГИКА ДЛЯ АДМИНА
   if (isAdminMode) {
       document.getElementById('adminManualBlock').style.display = 'block';
       document.getElementById('manualBookingCheckbox').checked = false;
@@ -593,6 +633,7 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
   
   if (isAdminMode) { 
       payload.adminPass = ADMIN_PASSWORD; 
+      // У админа по умолчанию лимит выключен, если не выбран ручной режим
       payload.ignoreLimit = true; 
       if (isManual) {
           payload.manualBooking = true;
@@ -740,7 +781,66 @@ async function openForceCancelModal(key) {
   const res = await fetch(`/api/admin/booking-info?pass=${ADMIN_PASSWORD}&seat=${key}`); const d = await res.json();
   document.getElementById('forceCancelInfo').innerHTML = `<b>Место:</b> ${formatSeatKey(key)}<br><b>Кто:</b> ${d.lastname} ${d.firstname} (${d.phone})`;
   currentForceCancelKey = key; document.getElementById('forceCancelModal').hidden = false;
+  
+  document.getElementById('edit-lastname').value = d.lastname || '';
+  document.getElementById('edit-firstname').value = d.firstname || '';
+  document.getElementById('edit-phone').value = d.phone || '';
+  document.getElementById('edit-group').value = d.group_name || '';
+  document.getElementById('edit-res-lastname').value = d.reserve_lastname || '';
+  document.getElementById('edit-res-firstname').value = d.reserve_firstname || '';
+  document.getElementById('edit-is-admin').checked = !!d.is_admin_booking;
 }
+
+function toggleEditMode() {
+  const fields = document.getElementById('editFields');
+  const toggleBtn = document.getElementById('editToggleBtn');
+  const saveBtn = document.getElementById('saveEditBtn');
+  if (fields.style.display === 'none') {
+    fields.style.display = 'block'; toggleBtn.style.display = 'none'; saveBtn.style.display = 'block';
+  } else {
+    fields.style.display = 'none'; toggleBtn.style.display = 'block'; saveBtn.style.display = 'none';
+  }
+}
+
+async function checkEditPhone() {
+    const phone = document.getElementById('edit-phone').value.trim();
+    if (phone.replace(/\D/g,'').length < 11) return;
+    const res = await fetch(`/api/auth/check-phone?phone=${encodeURIComponent(phone)}`);
+    if (res.ok) {
+        const d = await res.json();
+        document.getElementById('edit-lastname').value = d.user.lastname;
+        document.getElementById('edit-firstname').value = d.user.firstname;
+        document.getElementById('edit-group').value = d.user.group_name || '';
+        showToast('Клиент найден в базе, данные подставлены');
+    }
+}
+
+async function saveEditedBooking() {
+  const errorEl = document.getElementById('forceCancelError'); errorEl.textContent = '';
+  const lastname = document.getElementById('edit-lastname').value.trim();
+  const firstname = document.getElementById('edit-firstname').value.trim();
+  const phone = document.getElementById('edit-phone').value.trim();
+  const group = document.getElementById('edit-group').value.trim();
+  const resLast = document.getElementById('edit-res-lastname').value.trim();
+  const resFirst = document.getElementById('edit-res-firstname').value.trim();
+  const isAdminBooking = document.getElementById('edit-is-admin').checked;
+
+  if (lastname.length < 2) { errorEl.textContent = 'Введите фамилию'; return; }
+  if (firstname.length < 2) { errorEl.textContent = 'Введите имя'; return; }
+  
+  try {
+    const res = await fetch(`/api/admin/edit-booking?pass=${ADMIN_PASSWORD}`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ seat: currentForceCancelKey, firstname, lastname, phone, group_name: group, reserve_firstname: resFirst, reserve_lastname: resLast, is_admin_booking: isAdminBooking })
+    });
+    if (res.ok) {
+      document.getElementById('forceCancelModal').hidden = true; loadBookings(); showToast('Данные брони обновлены!');
+    } else {
+      const d = await res.json(); errorEl.textContent = 'Ошибка: ' + (d.error || 'Неизвестно');
+    }
+  } catch (e) { errorEl.textContent = 'Ошибка сети'; }
+}
+
 async function confirmForceCancel() { await fetch(`/api/admin/force-cancel?pass=${ADMIN_PASSWORD}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({seat: currentForceCancelKey}) }); document.getElementById('forceCancelModal').hidden = true; loadBookings(); }
 
 async function openAdminBulkCancel() {
@@ -779,9 +879,7 @@ async function confirmBulkCancel() {
     method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ phones: phonesToCancel })
   });
   if (res.ok) {
-    document.getElementById('bulkCancelModal').hidden = true;
-    loadBookings();
-    showToast('Брони выбранных пользователей сняты');
+    document.getElementById('bulkCancelModal').hidden = true; loadBookings(); showToast('Брони выбранных пользователей сняты');
   } else {
     alert('Ошибка при снятии');
   }
