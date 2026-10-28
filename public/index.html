@@ -6,6 +6,8 @@
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Бронирование мест - Концертный зал</title>
+<!-- Библиотека для чтения Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root { color-scheme: dark; --bg:#0f1319; --panel:#171d27; --seat-default:#2a3342; --seat-hover:#3a475c; --accent:#3b82f6; --selected:#f59e0b; --booked:#5a2a36; --blocked:#000; --text:#e6ebf2; --muted:#8b97a8; --bg-image: none; --bg-size: cover; --bg-pos: 50% 50%; }
   *{box-sizing:border-box}
@@ -19,7 +21,6 @@
   .event-switch button { background: transparent; color: var(--muted); border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 14px; }
   .event-switch button.active { background: var(--accent); color: #fff; }
   
-  /* ФИКС СЦЕНЫ (ПРИЛИПАЕТ) */
   .stage{ position: sticky; left: 50%; transform: translateX(-50%); width:min(400px,80%); height:40px; border-radius:0 0 50% 50%; background:#2a3446; display:flex; align-items:center; justify-content:center; color:#8b97a8; font-weight:600; letter-spacing:2px; text-transform:uppercase; margin-bottom:30px; border-top:4px solid #1f2735; z-index: 10; }
   
   .zone-title{font-size:11px; color:var(--muted); text-transform:uppercase; margin:15px 0 5px; font-weight:600; text-align:center}
@@ -28,7 +29,6 @@
   .col { display: flex; flex-direction: column; align-items: center; }
   .row { display: flex; gap: 4px; justify-content: center; margin-bottom: 4px; min-height: 20px; align-items: center; }
   
-  /* НОМЕРА РЯДОВ */
   .row-number { width: 24px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 11px; color: var(--muted); font-weight: 600; flex-shrink: 0; }
 
   .aisle { height: 20px; flex-shrink: 0; }
@@ -73,7 +73,6 @@
   .toast.show{opacity:1; transform:translate(-50%, -50%) scale(1);}
   .toast.error { background: #8b1c1c; }
   
-  /* ЖЕЛЕЗОБЕТОННЫЙ ФИКС ЭКРАНА ЗАГРУЗКИ */
   #loadingOverlay { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; justify-content: center; align-items: center; font-size: 18px; color: var(--text); transition: opacity 0.3s; }
   #loadingOverlay.hidden { display: none !important; opacity: 0; pointer-events: none; }
 
@@ -134,8 +133,7 @@
   </div>
   
   <div style="display:flex; flex-direction:column; gap:10px; margin-bottom: 5px;">
-    <button class="btn primary" style="width: 100%; background:#22c55e; padding: 12px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD, '_blank')">📥 Скачать Excel</button>
-    <button class="btn primary" style="width: 100%; background:#2b579a; padding: 12px;" onclick="window.open('/api/admin/export-word?pass=' + ADMIN_PASSWORD, '_blank')">📄 Скачать Word</button>
+    <button class="btn primary" style="width: 100%; background:#22c55e; padding: 12px;" onclick="window.open('/api/admin/export?pass=' + ADMIN_PASSWORD, '_blank')">📥 Скачать Excel (Брони)</button>
   </div>
 
   <details class="sidebar-section" open>
@@ -148,13 +146,19 @@
   </details>
 
   <details class="sidebar-section">
-    <summary>👥 База клиентов</summary>
+    <summary>👥 База клиентов (Excel)</summary>
     <div class="details-content">
       <div style="max-height:150px; overflow-y:auto; margin-bottom:10px; font-size:11px;" id="usersList"></div>
+      
+      <button class="btn ghost" style="width:100%; margin-bottom:5px; font-size:11px; padding:6px;" onclick="downloadExcelTemplate()">📄 Скачать шаблон</button>
+      <input type="file" id="excelFileInput" accept=".xlsx, .xls" style="display:none;">
+      <button class="btn primary" style="width:100%; background:#3b82f6; margin-bottom:15px;" onclick="document.getElementById('excelFileInput').click()">📤 Загрузить из Excel</button>
+      
+      <label>Добавить вручную:</label>
       <input type="text" id="u-lastname" placeholder="Фамилия">
       <input type="text" id="u-firstname" placeholder="Имя">
       <input type="tel" id="u-phone" placeholder="Телефон" oninput="formatPhone(this)">
-      <input type="text" id="u-group" placeholder="Группа (необязательно)">
+      <input type="text" id="u-group" placeholder="Группа (обязательно)">
       <button class="btn primary" style="width:100%; background:#3b82f6;" onclick="addUser()">Добавить / Обновить</button>
     </div>
   </details>
@@ -238,7 +242,7 @@
         <div id="userInfoText" style="font-size:13px; line-height:1.5;"></div>
       </div>
       <div id="reserveBox" style="background:#1f2937; padding:10px; border-radius:8px; margin-bottom:15px;">
-        <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Использовать чей-то резерв (Необязательно)</label>
+        <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Использовать чей-то резерв (Введите ФИО точно как в базе)</label>
         <div style="display:flex; gap:10px;">
           <input id="reserveLastname" type="text" placeholder="Фамилия" style="flex:1; margin:0;">
           <input id="reserveFirstname" type="text" placeholder="Имя" style="flex:1; margin:0;">
@@ -294,10 +298,12 @@
 <div class="modal" id="bulkCancelModal" hidden>
   <div class="modal-card">
     <h2 style="margin-top:0;">Массовое снятие</h2>
-    <p style="font-size:12px; color:var(--muted);">Выберите людей, чьи брони НЕ надо снимать.</p>
-    <div id="bulkExcludeList" style="max-height:200px; overflow-y:auto; margin-bottom:15px; font-size:12px;"></div>
-    <button class="btn primary" style="width:100%; background:#ef4444;" onclick="confirmBulkCancel()">Снять все остальные</button>
-    <button class="btn ghost" style="width:100%; margin-top:10px;" onclick="document.getElementById('bulkCancelModal').hidden = true">Отмена</button>
+    <p style="font-size:12px; color:var(--muted);">Поставьте галочки на тех, чьи брони нужно <b>СНЯТЬ</b>.</p>
+    <div id="bulkUsersList" style="max-height:300px; overflow-y:auto; margin-bottom:15px; font-size:13px;"></div>
+    <div style="display:flex; gap:10px;">
+        <button class="btn ghost" style="flex:1" onclick="document.getElementById('bulkCancelModal').hidden = true">Отмена</button>
+        <button class="btn primary" style="flex:1; background:#ef4444;" onclick="confirmBulkCancel()">Снять выбранные</button>
+    </div>
   </div>
 </div>
 
@@ -487,6 +493,8 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
   const phone = document.getElementById('phone').value.trim();
   const rL = document.getElementById('reserveLastname').value.trim(); const rF = document.getElementById('reserveFirstname').value.trim();
   if (phone.replace(/\D/g,'').length < 11) { err.textContent = 'Введите корректный телефон'; return; }
+  if ((rL && !rF) || (!rL && rF)) { err.textContent = 'Для резерва введите и имя, и фамилию'; return; }
+  
   const btn = document.getElementById('submitBtn'); btn.disabled = true; btn.textContent = '...';
   const payload = { seats: [...selected], phone, reserveFirstname: rF, reserveLastname: rL };
   if (isAdminMode) { payload.adminPass = ADMIN_PASSWORD; payload.ignoreLimit = true; }
@@ -559,27 +567,100 @@ async function loadAdminUsers() {
 }
 async function addUser() {
   const l = document.getElementById('u-lastname').value; const f = document.getElementById('u-firstname').value; const p = document.getElementById('u-phone').value; const g = document.getElementById('u-group').value;
-  if (!l || !f || !p) return alert('Заполните все поля');
+  if (!l || !f || !p || !g) return alert('Заполните все поля, включая группу!');
   await fetch(`/api/admin/users?pass=${ADMIN_PASSWORD}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({lastname: l, firstname: f, phone: p, group_name: g}) });
   loadAdminUsers(); showToast('Клиент добавлен');
 }
+
+function downloadExcelTemplate() {
+  const ws = XLSX.utils.json_to_sheet([{ "Фамилия": "Иванов", "Имя": "Иван", "Телефон": "+79991234567", "Группа": "1" }]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Шаблон");
+  XLSX.writeFile(wb, "template_users.xlsx");
+}
+
+document.getElementById('excelFileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (evt) => {
+    try {
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, {type: 'array'});
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(sheet);
+      
+      const users = json.map(row => ({
+        lastname: row['Фамилия'] || row['Фамилия '],
+        firstname: row['Имя'] || row['Имя '],
+        phone: String(row['Телефон'] || row['Телефон ']),
+        group_name: row['Группа'] || row['Группа ']
+      })).filter(u => u.lastname && u.firstname && u.phone && u.group_name);
+
+      if (!users.length) return alert('Файл пуст или неверный формат. Нужны колонки: Фамилия, Имя, Телефон, Группа (все обязательны)');
+
+      const res = await fetch(`/api/admin/bulk-users?pass=${ADMIN_PASSWORD}`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ users })
+      });
+      if (res.ok) {
+        alert(`Успешно загружено ${users.length} клиентов!`);
+        loadAdminUsers();
+      } else {
+        alert('Ошибка при загрузке базы');
+      }
+    } catch (err) {
+      alert('Ошибка чтения файла: ' + err.message);
+    }
+    e.target.value = ''; // Сброс
+  };
+  reader.readAsArrayBuffer(file);
+});
+
 async function openForceCancelModal(key) {
   const res = await fetch(`/api/admin/booking-info?pass=${ADMIN_PASSWORD}&seat=${key}`); const d = await res.json();
   document.getElementById('forceCancelInfo').innerHTML = `<b>Место:</b> ${formatSeatKey(key)}<br><b>Кто:</b> ${d.lastname} ${d.firstname} (${d.phone})`;
   currentForceCancelKey = key; document.getElementById('forceCancelModal').hidden = false;
 }
 async function confirmForceCancel() { await fetch(`/api/admin/force-cancel?pass=${ADMIN_PASSWORD}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({seat: currentForceCancelKey}) }); document.getElementById('forceCancelModal').hidden = true; loadBookings(); }
+
 async function openAdminBulkCancel() {
-  const res = await fetch(`/api/bookings`); const data = await res.json();
-  document.getElementById('bulkExcludeList').innerHTML = data.filter(x => x.status === 'booked').map(x => `<div>${formatSeatKey(x.seat_key)}</div>`).join('');
+  const res = await fetch(`/api/admin/bookings-by-users?pass=${ADMIN_PASSWORD}`);
+  const data = await res.json();
+  const container = document.getElementById('bulkUsersList');
+  if (data.length === 0) {
+     container.innerHTML = 'Нет активных броней';
+  } else {
+     container.innerHTML = data.map(u => `
+        <div style="display:flex; align-items:center; gap:10px; padding:8px; border-bottom:1px solid #333;">
+            <input type="checkbox" class="bulk-user-cb" data-phone="${u.phone}" checked style="width:20px; height:20px; margin:0;">
+            <div>
+                <b>${u.lastname} ${u.firstname}</b> <span style="color:var(--muted); font-size:12px;">(${u.phone})</span><br>
+                <span style="font-size:11px;">Мест: ${u.seat_count} (${u.seats})</span>
+            </div>
+        </div>
+     `).join('');
+  }
   document.getElementById('bulkCancelModal').hidden = false;
 }
+
 async function confirmBulkCancel() {
-  const res = await fetch('/api/bookings'); const data = await res.json();
-  const seats = data.filter(x => x.status === 'booked').map(x => x.seat_key);
-  await fetch(`/api/admin/bulk-force-cancel?pass=${ADMIN_PASSWORD}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({seats}) });
-  document.getElementById('bulkCancelModal').hidden = true; loadBookings(); showToast('Все брони сняты');
+  const checkboxes = document.querySelectorAll('.bulk-user-cb:checked');
+  const phones = Array.from(checkboxes).map(cb => cb.dataset.phone);
+  if (!phones.length) return alert('Никто не выбран');
+  if (!confirm(`Вы уверены, что хотите снять брони у ${phones.length} человек?`)) return;
+  
+  const res = await fetch(`/api/admin/bulk-cancel-users?pass=${ADMIN_PASSWORD}`, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ phones })
+  });
+  if (res.ok) {
+    document.getElementById('bulkCancelModal').hidden = true;
+    loadBookings();
+    showToast('Брони выбранных пользователей сняты');
+  } else {
+    alert('Ошибка при снятии');
+  }
 }
+
 async function bulkEdit() {
   const oldPhone = document.getElementById('bulk-old-phone').value.trim(); const newL = document.getElementById('bulk-new-lastname').value.trim(); const newF = document.getElementById('bulk-new-firstname').value.trim(); const newP = document.getElementById('bulk-new-phone').value.trim();
   if (!oldPhone || !newL || !newF || !newP) return alert('Заполните все');
