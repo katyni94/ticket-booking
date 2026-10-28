@@ -20,7 +20,6 @@
   .event-switch button { background: transparent; color: var(--muted); border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 14px; }
   .event-switch button.active { background: var(--accent); color: #fff; }
   
-  /* ИСПРАВЛЕНА СЦЕНА (всегда по центру) */
   .stage { margin: 0 auto 30px auto; width: min(400px, 80%); height: 40px; border-radius: 0 0 50% 50%; background: #2a3446; display: flex; align-items: center; justify-content: center; color: #8b97a8; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; border-top: 4px solid #1f2735; z-index: 10; }
   
   .zone-title{font-size:11px; color:var(--muted); text-transform:uppercase; margin:15px 0 5px; font-weight:600; text-align:center}
@@ -28,9 +27,7 @@
   .hall-layout { display: inline-flex; text-align: left; gap: 30px; align-items: flex-start; padding: 0 10px; }
   .col { display: flex; flex-direction: column; align-items: center; }
   .row { display: flex; gap: 4px; justify-content: center; margin-bottom: 4px; min-height: 20px; align-items: center; }
-  
   .row-number { width: 24px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 11px; color: var(--muted); font-weight: 600; flex-shrink: 0; }
-
   .aisle { height: 20px; flex-shrink: 0; }
   .dj-booth, .wall-block { height: 20px; background: #1f2633; border: 1px solid #3b465c; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #aaa; flex-shrink: 0; }
   .wall-block { border-style: dashed; background: #151b24; }
@@ -42,7 +39,6 @@
   .seat.disabled { opacity: 0.2 !important; cursor: not-allowed !important; filter: grayscale(100%); }
   .seat.painting { border: 2px solid #fff !important; z-index: 20; transform: scale(1.1); }
   .seat.highlighted { box-shadow: 0 0 0 3px #22c55e inset !important; transform: scale(1.1); z-index: 20; }
-
   .legend{display:flex; gap:15px; flex-wrap:wrap; justify-content:center; margin:15px 0; font-size:12px; color:var(--muted)}
   .legend span{display:flex; align-items:center; gap:5px}
   .dot{width:12px; height:12px; border-radius:3px; display:inline-block}
@@ -72,7 +68,6 @@
   .toast{position:fixed; top: 50%; left:50%; transform:translate(-50%, -50%) scale(0.9); background:#1a8a4d; color:#fff; padding:15px 30px; border-radius:12px; font-size:16px; font-weight:600; opacity:0; pointer-events:none; transition:.3s; z-index:700; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;}
   .toast.show{opacity:1; transform:translate(-50%, -50%) scale(1);}
   .toast.error { background: #8b1c1c; }
-  
   #loadingOverlay { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; justify-content: center; align-items: center; font-size: 18px; color: var(--text); transition: opacity 0.3s; }
   #loadingOverlay.hidden { display: none !important; opacity: 0; pointer-events: none; }
 
@@ -335,7 +330,7 @@ const POLL_MS = 5000; const ADMIN_PASSWORD = "admin123";
 let currentEvent = 'left', CURRENT_MAX_SEATS = 4, forcedSideMode = null;
 let bookedSet = new Set(), selected = new Set(), cancelSeats = new Set();
 let isAdminMode = false, adminActionMode = 'block', currentForceCancelKey = null;
-let priceSettings = {}, activePaint = null, paintStart = null, allGroups = [];
+let priceSettings = {}, activePaint = null, paintStart = null, allUsers = [];
 
 const parterreStrings = ["-000000000--000000000000000000000--000000000-","--00000000--000000000000000000000--00000000--","--00000000--000000000000000000000--00000000--","--00000000---00000000000000000000--0000000---","-------------00000000000000000000-----------","---00000000--0000000000000000000---00000000--","-----000000--0000000000000000000---000000----","----0000000--0000000000000000000---0000000----","----0000000--000000000000000000----0000000----","-----000000--000000000000000000---000000-----","-----000000--000000000000000000---000000-----","-----000000---00000000000000000---000000-----","-----000000---00000000000000000---000000-----","-----000000---00000000000000000---000000-----","-----000000---00000000000000000---000000-----","------000000---0000000000000000---000000-----","------000000---0000000000000000---000000-----","------000000---0000000000000000--00000-------","-------00000---0000дддддд00000---00000-------","-------00000---0000дддддд00000---00000-------","-------00000---0000дддддд00000---00000-------","------000000000000000000000000000000---------","-----------00000000000000000000----","------------00000000000000000------","-----------0000000000000000000----"];
 const parterreMaxSeats = [39, 37, 37, 35, 20, 35, 31, 33, 32, 30, 30, 29, 29, 29, 29, 28, 28, 27, 19, 19, 19, 30, 20, 17, 19];
@@ -597,4 +592,195 @@ function selectAllCancel() {
 }
 async function cancelBookings() {
   if (!cancelSeats.size) return;
-  const phone =
+  const phone = document.getElementById('cancelPhone').value.trim();
+  const res = await fetch('/api/cancel', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({seats:[...cancelSeats], phone}) });
+  if (res.ok) { document.getElementById('cancelModal').hidden = true; loadBookings(); showToast('Снято!'); }
+  else showToast('Ошибка', 'error');
+}
+
+// АДМИН
+document.getElementById('adminBtn').addEventListener('click', () => {
+  if (isAdminMode) document.body.classList.add('admin-mode'); else { const p = prompt('Пароль:'); if (p === ADMIN_PASSWORD) { localStorage.setItem('hall_admin', 'true'); isAdminMode = true; document.body.classList.add('admin-mode'); document.getElementById('adminBtn').style.display = 'none'; loadAdminUsers(); render(); } }
+});
+function logoutAdmin() { localStorage.removeItem('hall_admin'); isAdminMode = false; document.body.classList.remove('admin-mode'); document.getElementById('adminBtn').style.display = 'block'; render(); showToast('Вы вышли'); }
+async function loadAdminUsers() {
+  const res = await fetch(`/api/admin/users?pass=${ADMIN_PASSWORD}`);
+  allUsers = await res.json();
+  document.getElementById('usersList').innerHTML = allUsers.map(u => `<div>${u.lastname} ${u.firstname} (${u.phone})</div>`).join('');
+  renderGroupRestrictions();
+}
+async function addUser() {
+  const l = document.getElementById('u-lastname').value; const f = document.getElementById('u-firstname').value; const p = document.getElementById('u-phone').value; const g = document.getElementById('u-group').value;
+  if (!l || !f || !p || !g) return alert('Заполните все поля, включая группу!');
+  await fetch(`/api/admin/users?pass=${ADMIN_PASSWORD}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({lastname: l, firstname: f, phone: p, group_name: g}) });
+  loadAdminUsers(); showToast('Клиент добавлен');
+}
+
+function downloadExcelTemplate() {
+  const ws = XLSX.utils.json_to_sheet([{ "Фамилия": "Иванов", "Имя": "Иван", "Телефон": "+79991234567", "Группа": "1" }]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Шаблон");
+  XLSX.writeFile(wb, "template_users.xlsx");
+}
+
+document.getElementById('excelFileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (evt) => {
+    try {
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, {type: 'array'});
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(sheet);
+      
+      const rawUsers = json.map(row => ({
+        lastname: String(row['Фамилия'] || row['Фамилия '] || '').trim(),
+        firstname: String(row['Имя'] || row['Имя '] || '').trim(),
+        phone: String(row['Телефон'] || row['Телефон '] || '').trim(),
+        group_name: String(row['Группа'] || row['Группа '] || '').trim()
+      })).filter(u => u.lastname && u.firstname && u.phone && u.group_name);
+
+      if (!rawUsers.length) return alert('Файл пуст или неверный формат. Нужны колонки: Фамилия, Имя, Телефон, Группа (все обязательны)');
+
+      // Отсеиваем дубли внутри самого файла
+      const uniqueUsers = [];
+      const seenPhones = new Set();
+      let skippedCount = 0;
+
+      rawUsers.forEach(u => {
+        if (seenPhones.has(u.phone)) {
+          skippedCount++;
+        } else {
+          seenPhones.add(u.phone);
+          uniqueUsers.push(u);
+        }
+      });
+
+      const res = await fetch(`/api/admin/bulk-users?pass=${ADMIN_PASSWORD}`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ users: uniqueUsers })
+      });
+      
+      if (res.ok) {
+        let msg = `Успешно загружено ${uniqueUsers.length} клиентов!`;
+        if (skippedCount > 0) msg += `\nПропущено дублей в файле: ${skippedCount}.`;
+        alert(msg);
+        loadAdminUsers(); // Обновляем список и группы сразу
+      } else {
+        alert('Ошибка при загрузке базы');
+      }
+    } catch (err) {
+      alert('Ошибка чтения файла: ' + err.message);
+    }
+    e.target.value = ''; // Сброс
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+async function openForceCancelModal(key) {
+  const res = await fetch(`/api/admin/booking-info?pass=${ADMIN_PASSWORD}&seat=${key}`); const d = await res.json();
+  document.getElementById('forceCancelInfo').innerHTML = `<b>Место:</b> ${formatSeatKey(key)}<br><b>Кто:</b> ${d.lastname} ${d.firstname} (${d.phone})`;
+  currentForceCancelKey = key; document.getElementById('forceCancelModal').hidden = false;
+}
+async function confirmForceCancel() { await fetch(`/api/admin/force-cancel?pass=${ADMIN_PASSWORD}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({seat: currentForceCancelKey}) }); document.getElementById('forceCancelModal').hidden = true; loadBookings(); }
+
+async function openAdminBulkCancel() {
+  const res = await fetch(`/api/admin/bookings-by-users?pass=${ADMIN_PASSWORD}`);
+  const data = await res.json();
+  const container = document.getElementById('bulkUsersList');
+  if (data.length === 0) {
+     container.innerHTML = 'Нет активных броней';
+  } else {
+     container.innerHTML = data.map(u => `
+        <div style="display:flex; align-items:center; gap:10px; padding:8px; border-bottom:1px solid #333;">
+            <input type="checkbox" class="bulk-user-cb" data-phone="${u.phone}" checked style="width:20px; height:20px; margin:0;">
+            <div>
+                <b>${u.lastname} ${u.firstname}</b> <span style="color:var(--muted); font-size:12px;">(${u.phone})</span><br>
+                <span style="font-size:11px;">Мест: ${u.seat_count} (${u.seats})</span>
+            </div>
+        </div>
+     `).join('');
+  }
+  document.getElementById('bulkCancelModal').hidden = false;
+}
+
+function toggleAllBulkCheckboxes(state) {
+    document.querySelectorAll('.bulk-user-cb').forEach(cb => cb.checked = state);
+}
+
+async function confirmBulkCancel() {
+  const checkboxes = document.querySelectorAll('.bulk-user-cb');
+  const phonesToCancel = [];
+  checkboxes.forEach(cb => { if (!cb.checked) phonesToCancel.push(cb.dataset.phone); });
+  
+  if (phonesToCancel.length === 0) return alert('Вы оставили галочки на всех. Никого не нужно снимать.');
+  if (!confirm(`Вы уверены, что хотите снять брони у ${phonesToCancel.length} человек (у которых НЕТ галочки)?`)) return;
+  
+  const res = await fetch(`/api/admin/bulk-cancel-users?pass=${ADMIN_PASSWORD}`, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ phones: phonesToCancel })
+  });
+  if (res.ok) {
+    document.getElementById('bulkCancelModal').hidden = true;
+    loadBookings();
+    showToast('Брони выбранных пользователей сняты');
+  } else {
+    alert('Ошибка при снятии');
+  }
+}
+
+async function bulkEdit() {
+  const oldPhone = document.getElementById('bulk-old-phone').value.trim(); const newL = document.getElementById('bulk-new-lastname').value.trim(); const newF = document.getElementById('bulk-new-firstname').value.trim(); const newP = document.getElementById('bulk-new-phone').value.trim();
+  if (!oldPhone || !newL || !newF || !newP) return alert('Заполните все');
+  const res = await fetch(`/api/admin/bulk-edit?pass=${ADMIN_PASSWORD}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({oldPhone, newLastname: newL, newFirstname: newF, newPhone: newP}) });
+  if (res.ok) showToast('Обновлено!');
+}
+async function checkDuplicates() {
+  const res = await fetch(`/api/admin/duplicates?pass=${ADMIN_PASSWORD}`); const data = await res.json();
+  const list = document.getElementById('duplicatesList');
+  list.innerHTML = data.length === 0 ? '✅ Дублей нет!' : data.map(d => `<div style="padding:10px; border-bottom:1px solid #333;"><b>${d.display_lastname} ${d.display_firstname}</b><br>Мест: ${d.total_seats}<br>Телефоны: ${d.phones}</div>`).join('');
+  document.getElementById('duplicatesModal').hidden = false;
+}
+
+// ВОССТАНОВЛЕНИЕ ПЕРЕКЛЮЧЕНИЯ РЕЖИМОВ АДМИНКИ
+const adminModeSelect = document.getElementById('adminModeSelect');
+adminModeSelect.addEventListener('change', (e) => {
+    adminActionMode = e.target.value;
+    adminModeSelect.classList.remove('mode-book', 'mode-paint', 'mode-manage');
+    paintStart = null; document.querySelectorAll('.painting').forEach(el => el.classList.remove('painting'));
+    
+    if (adminActionMode === 'book') { 
+        adminModeSelect.classList.add('mode-book'); 
+        document.getElementById('paintPalette').style.display = 'none'; 
+        showToast('Режим: Бронирование на клиента'); 
+    }
+    else if (adminActionMode === 'paint') { 
+        adminModeSelect.classList.add('mode-paint'); 
+        document.getElementById('paintPalette').style.display = 'flex'; 
+        showToast('Режим: Категории цен'); 
+    }
+    else if (adminActionMode === 'manage') { 
+        adminModeSelect.classList.add('mode-manage'); 
+        document.getElementById('paintPalette').style.display = 'none'; 
+        showToast('Режим: Управление бронями'); 
+    }
+    else { 
+        document.getElementById('paintPalette').style.display = 'none'; 
+        showToast('Режим: Блокировка мест'); 
+    }
+});
+
+let toastTimer;
+function showToast(msg, type = 'success') { const toast = document.getElementById('toast'); toast.textContent = msg; toast.className = 'toast show ' + (type === 'error' ? 'error' : ''); clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.classList.remove('show'); }, 3000); }
+
+// Восстанавливаем сессию админа
+if (localStorage.getItem('hall_admin') === 'true') {
+    isAdminMode = true;
+    document.body.classList.add('admin-mode');
+    document.getElementById('adminBtn').style.display = 'none';
+    loadAdminUsers();
+}
+
+loadSettings(); loadBookings(); setInterval(loadBookings, POLL_MS);
+</script>
+</body>
+</html>
