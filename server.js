@@ -43,18 +43,6 @@ function normPhone(p) { return String(p || '').replace(/\D/g, '').slice(-10); }
 const tanci_parterre = { 1: [19, 39], 2: [18, 37], 3: [18, 37], 4: [17, 35], 5: [10, 20], 6: [17, 35], 7: [15, 31], 8: [16, 33], 9: [15, 32], 10: [14, 30], 11: [14, 30], 12: [14, 29], 13: [14, 29], 14: [14, 29], 15: [14, 29], 16: [14, 28], 17: [14, 28], 18: [13, 27], 19: [11, 19], 20: [11, 19], 21: [11, 19], 22: [14, 30], 23: [9, 20], 24: [7, 17], 25: [8, 19] };
 const tanci_central = { 1: [14, 27], 2: [14, 28], 3: [15, 30], 4: [16, 31], 5: [15, 28] };
 
-// ХЕЛПЕР ДЛЯ КРАСИВОГО ВЫВОДА МЕСТ В ЭКСПОРТЕ
-function formatSeatKey(key) {
-  if (!key) return '';
-  if (key.startsWith('parterre-')) { const p = key.split('-'); return `Партер, Ряд ${p[1]}, Место ${p[2]}`; }
-  if (key.startsWith('central-')) { const p = key.split('-'); return `Центр. балкон, Ряд ${p[1]}, Место ${p[2]}`; }
-  if (key.startsWith('balc-left-a-')) { const p = key.split('-'); return `Левый А, Ряд ${p[3]}, Место ${p[4]}`; }
-  if (key.startsWith('balc-left-b-')) { const p = key.split('-'); return `Левый Б, Ряд ${p[3]}, Место ${p[4]}`; }
-  if (key.startsWith('balc-right-a-')) { const p = key.split('-'); return `Правый А, Ряд ${p[3]}, Место ${p[4]}`; }
-  if (key.startsWith('balc-right-b-')) { const p = key.split('-'); return `Правый Б, Ряд ${p[3]}, Место ${p[4]}`; }
-  return key;
-}
-
 function getSeatSide(seatKey) {
     if (seatKey.startsWith('balc-left')) return 'left';
     if (seatKey.startsWith('balc-right')) return 'right';
@@ -388,7 +376,7 @@ app.get('/api/admin/duplicates', async (req, res) => {
   res.json(rows);
 });
 
-// ЭКСПОРТ EXCEL (С КОЛОНКОЙ МЕСТ В СВОДКЕ)
+// ЭКСПОРТ EXCEL (С ПЕРЕНОСОМ СТРОК В МЕСТАХ)
 app.get('/api/admin/export', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   const sideFilter = req.query.side;
@@ -402,7 +390,6 @@ app.get('/api/admin/export', async (req, res) => {
 
     const workbook = new ExcelJS.Workbook();
     
-    // ЛИСТ 1: БИЛЕТЫ
     const sheet1 = workbook.addWorksheet('Билеты');
     sheet1.columns = [ 
       { header: 'Зона', key: 'zone', width: 20 }, { header: 'Ряд', key: 'row', width: 10 }, 
@@ -412,13 +399,12 @@ app.get('/api/admin/export', async (req, res) => {
       { header: 'Админ', key: 'admin', width: 10 }, { header: 'Сумма', key: 'price', width: 15 } 
     ];
 
-    // ЛИСТ 2: СВОДКА (С КОЛОНКОЙ МЕСТ)
     const sheet2 = workbook.addWorksheet('Сводка');
     sheet2.columns = [
       { header: 'Фамилия', key: 'lastname', width: 20 }, { header: 'Имя', key: 'firstname', width: 20 },
       { header: 'Телефон', key: 'phone', width: 20 }, { header: 'Группа', key: 'group', width: 20 },
       { header: 'Всего мест', key: 'count', width: 15 }, { header: 'Из них админских', key: 'adminCount', width: 15 },
-      { header: 'Места', key: 'seatsStr', width: 50 }, // <--- НОВАЯ КОЛОНКА
+      { header: 'Места', key: 'seatsStr', width: 35, style: { alignment: { wrapText: true, vertical: 'top' } } }, 
       { header: 'Итого сумма', key: 'total', width: 15 }
     ];
 
@@ -432,7 +418,7 @@ app.get('/api/admin/export', async (req, res) => {
       
       const price = getPrice(b.seat_key);
       const reserveStr = (b.reserve_lastname && b.reserve_firstname) ? `${b.reserve_lastname} ${b.reserve_firstname}` : '';
-      const seatLabel = formatSeatKey(b.seat_key);
+      const seatLabel = `Ряд ${row}, Место ${seat}`;
       
       sheet1.addRow({
         zone: zoneName, row: row, seat: seat, lastname: b.lastname, firstname: b.firstname,
@@ -451,7 +437,7 @@ app.get('/api/admin/export', async (req, res) => {
     });
 
     Object.values(summaryMap).forEach(p => {
-      p.seatsStr = p.seatsList.join('; '); // Собираем места в строку через ;
+      p.seatsStr = p.seatsList.join(';\n'); 
       sheet2.addRow(p);
     });
 
@@ -461,7 +447,7 @@ app.get('/api/admin/export', async (req, res) => {
   } catch (err) { res.status(500).send('Ошибка'); }
 });
 
-// ЭКСПОРТ WORD (С КОЛОНКОЙ МЕСТ В СВОДКЕ)
+// ЭКСПОРТ WORD (С ПЕРЕНОСОМ СТРОК В МЕСТАХ)
 app.get('/api/admin/export-word', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   const sideFilter = req.query.side;
@@ -478,7 +464,7 @@ app.get('/api/admin/export-word', async (req, res) => {
     <style>
       body { font-family: Arial, sans-serif; font-size: 12pt; }
       table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-      th, td { border: 1px solid #000; padding: 5px; text-align: left; }
+      th, td { border: 1px solid #000; padding: 5px; text-align: left; vertical-align: top; }
       th { background-color: #f0f0f0; font-weight: bold; }
       h1 { font-size: 16pt; }
     </style></head><body>`;
@@ -496,7 +482,7 @@ app.get('/api/admin/export-word', async (req, res) => {
 
       const price = getPrice(b.seat_key);
       const reserveStr = (b.reserve_lastname && b.reserve_firstname) ? `${b.reserve_lastname} ${b.reserve_firstname}` : '';
-      const seatLabel = formatSeatKey(b.seat_key);
+      const seatLabel = `Ряд ${row}, Место ${seat}`;
       
       html += `<tr><td>${zoneName}</td><td>${row}</td><td>${seat}</td><td>${b.lastname}</td><td>${b.firstname}</td><td>${b.phone}</td><td>${reserveStr}</td><td>${b.group_name || ''}</td><td>${b.is_admin_booking ? 'да' : ''}</td><td>${price} ₽</td></tr>`;
 
@@ -514,7 +500,7 @@ app.get('/api/admin/export-word', async (req, res) => {
     html += `<h1>Сводка по покупателям</h1>`;
     html += `<table><tr><th>Фамилия</th><th>Имя</th><th>Телефон</th><th>Группа</th><th>Всего мест</th><th>Из них админских</th><th>Места</th><th>Итого сумма</th></tr>`;
     Object.values(summaryMap).forEach(p => {
-      html += `<tr><td>${p.lastname}</td><td>${p.firstname}</td><td>${p.phone}</td><td>${p.group}</td><td>${p.count}</td><td>${p.adminCount}</td><td>${p.seatsList.join('; ')}</td><td>${p.total} ₽</td></tr>`;
+      html += `<tr><td>${p.lastname}</td><td>${p.firstname}</td><td>${p.phone}</td><td>${p.group}</td><td>${p.count}</td><td>${p.adminCount}</td><td>${p.seatsList.join(';<br>')}</td><td>${p.total} ₽</td></tr>`;
     });
     html += `</table></body></html>`;
 
