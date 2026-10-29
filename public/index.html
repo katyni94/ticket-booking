@@ -7,6 +7,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Бронирование мест - Концертный зал</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Библиотека для создания картинок -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   :root { color-scheme: dark; --bg:#0f1319; --panel:#171d27; --seat-default:#2a3342; --seat-hover:#3a475c; --accent:#3b82f6; --selected:#f59e0b; --booked:#5a2a36; --blocked:#000; --text:#e6ebf2; --muted:#8b97a8; --bg-image: none; --bg-size: cover; --bg-pos: 50% 50%; }
   *{box-sizing:border-box}
@@ -71,6 +73,17 @@
   #loadingOverlay { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; justify-content: center; align-items: center; font-size: 18px; color: var(--text); transition: opacity 0.3s; }
   #loadingOverlay.hidden { display: none !important; opacity: 0; pointer-events: none; }
 
+  /* Стили для билета */
+  #ticketPreview {
+      background: #fff; color: #000; padding: 30px; border-radius: 12px; font-family: 'Segoe UI', Arial, sans-serif; text-align: left;
+      position: relative; overflow: hidden; width: 100%; box-sizing: border-box;
+  }
+  #ticketPreview h2 { margin: 0 0 10px; font-size: 24px; color: #1a1a1a; }
+  #ticketPreview .ticket-info { font-size: 14px; color: #555; margin-bottom: 20px; line-height: 1.5; }
+  #ticketPreview .ticket-seats { background: #f0f4f8; padding: 15px; border-radius: 8px; font-size: 15px; font-weight: bold; color: #333; line-height: 1.6; border-left: 4px solid #3b82f6; }
+  #ticketPreview .ticket-footer { margin-top: 20px; border-top: 2px dashed #ccc; padding-top: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 16px;}
+  #ticketPreview .barcode { width: 100%; height: 40px; background: repeating-linear-gradient(to right, #000, #000 2px, #fff 2px, #fff 4px, #000 4px, #000 6px, #fff 6px, #fff 10px); margin-top: 15px; opacity: 0.8; }
+
   @media (max-width: 768px) {
     body { padding: 10px 5px 300px; }
     body.admin-mode { padding-right: 0; overflow: hidden; }
@@ -83,6 +96,8 @@
     .modal { align-items: flex-end; padding: 0; }
     .modal-card { border-radius: 20px 20px 0 0; max-height: 85vh; padding-bottom: 40px; }
     #closeSidebarBtn { display: block !important; }
+    #ticketPreview { padding: 20px; }
+    #ticketPreview h2 { font-size: 20px; }
   }
 </style>
 </head>
@@ -242,12 +257,43 @@
   <button class="btn primary" id="bookBtn" disabled>Забронировать</button>
 </div>
 
-<!-- МОДАЛКА КРИТИЧЕСКОЙ ОШИБКИ (БОЛЬШАЯ) -->
+<!-- МОДАЛКА КРИТИЧЕСКОЙ ОШИБКИ -->
 <div class="modal" id="bigAlertModal" hidden style="background: rgba(5,8,12,.9);">
   <div class="modal-card" style="text-align:center; border: 2px solid #f87171; box-shadow: 0 0 30px rgba(248,113,113,0.3); padding: 40px 20px;">
     <h2 style="color: #f87171; font-size: 24px; margin-bottom: 20px;">Ой! Места уже заняты 😔</h2>
     <div id="bigAlertText" style="font-size: 16px; line-height: 1.6; margin-bottom: 25px; color: #e6ebf2;"></div>
     <button class="btn primary" style="background:#3b82f6; font-size: 16px; padding: 12px 24px; width: 100%;" onclick="document.getElementById('bigAlertModal').hidden = true">Хорошо, понятно</button>
+  </div>
+</div>
+
+<!-- МОДАЛКА БИЛЕТА -->
+<div class="modal" id="ticketModal" hidden>
+  <div class="modal-card">
+    <h2 style="margin-top:0; text-align:center; color:#22c55e;">Билет успешно забронирован!</h2>
+    <p style="text-align:center; color:var(--muted); font-size:13px; margin-bottom:20px;">Сохраните его или сделайте скриншот.</p>
+    
+    <!-- Сам билет (этот блок будет сохраняться как картинка) -->
+    <div id="ticketPreview">
+        <h2>Концертный зал</h2>
+        <div class="ticket-info">
+            <b>Мероприятие:</b> Танцы без возраста<br>
+            <b>Дата и время:</b> 25 ноября, 19:00<br>
+            <b>Адрес:</b> ул. Ленина, 27а (Омская филармония)
+        </div>
+        <div style="margin-bottom:10px; font-size:14px;"><b>Владелец:</b> <span id="t-name"></span></div>
+        <div class="ticket-seats" id="t-seats"></div>
+        
+        <div class="ticket-footer">
+            <span>Итого:</span>
+            <span id="t-total"></span>
+        </div>
+        <div class="barcode"></div>
+    </div>
+
+    <div style="display:flex; gap:10px; margin-top:20px;">
+        <button class="btn ghost" style="flex:1" onclick="document.getElementById('ticketModal').hidden = true">Закрыть</button>
+        <button class="btn primary" id="downloadTicketBtn" style="flex:1; background:#22c55e;" onclick="downloadTicket()">📥 Скачать билет</button>
+    </div>
   </div>
 </div>
 
@@ -308,6 +354,7 @@
 <div class="modal" id="cancelModal" hidden>
   <div class="modal-card">
     <h2 style="margin-top:0;">Снять бронь</h2>
+    <!-- ПОФИКШЕН ID И ОЧИСТКА ПРИ ОТКРЫТИИ -->
     <input id="cancelPhone" type="tel" placeholder="Введите ваш телефон" style="margin-bottom:10px;" oninput="formatPhone(this)">
     <button class="btn primary" style="width:100%; margin-bottom:15px;" onclick="findMyBookings()">Найти мои места</button>
     <div id="myBookingsList" style="display:none;">
@@ -404,7 +451,21 @@ const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('side') === 'left') forcedSideMode = 'left'; if (urlParams.get('side') === 'right') forcedSideMode = 'right';
 if (forcedSideMode) { currentEvent = forcedSideMode; document.getElementById('eventSwitch').style.display = 'none'; document.getElementById('adminBtn').style.display = 'none'; }
 
-function formatPhone(input) { let digits = input.value.replace(/\D/g, ''); if (digits.startsWith('8')) digits = '7' + digits.slice(1); if (!digits.startsWith('7') && digits.length > 0) digits = '7' + digits; if (digits.length > 11) digits = digits.slice(0, 11); let f = ''; if (digits.length > 0) f = '+7'; if (digits.length > 1) f += ' (' + digits.slice(1, 4); if (digits.length >= 4) f += ') ' + digits.slice(4, 7); if (digits.length >= 7) f += '-' + digits.slice(7, 9); if (digits.length >= 9) f += '-' + digits.slice(9, 11); input.value = f; }
+// ПОФИКШЕННЫЙ ФОРМАТТЕР ТЕЛЕФОНА
+function formatPhone(input) {
+    let digits = input.value.replace(/\D/g, '');
+    if (digits === '7' || digits === '') { input.value = ''; return; }
+    if (digits.startsWith('8')) digits = '7' + digits.slice(1);
+    if (!digits.startsWith('7') && digits.length > 0) digits = '7' + digits;
+    if (digits.length > 11) digits = digits.slice(0, 11);
+    let f = '+7';
+    if (digits.length > 1) f += ' (' + digits.slice(1, 4);
+    if (digits.length >= 4) f += ') ' + digits.slice(4, 7);
+    if (digits.length >= 7) f += '-' + digits.slice(7, 9);
+    if (digits.length >= 9) f += '-' + digits.slice(9, 11);
+    input.value = f;
+}
+
 function formatSeatKey(key) { if (!key) return ''; if (key.startsWith('parterre-')) { const p = key.split('-'); return `Партер, Ряд ${p[1]}, Место ${p[2]}`; } if (key.startsWith('central-')) { const p = key.split('-'); return `Центр. балкон, Ряд ${p[1]}, Место ${p[2]}`; } if (key.startsWith('balc-left-a-')) { const p = key.split('-'); return `Левый А, Ряд ${p[3]}, Место ${p[4]}`; } if (key.startsWith('balc-left-b-')) { const p = key.split('-'); return `Левый Б, Ряд ${p[3]}, Место ${p[4]}`; } if (key.startsWith('balc-right-a-')) { const p = key.split('-'); return `Правый А, Ряд ${p[3]}, Место ${p[4]}`; } if (key.startsWith('balc-right-b-')) { const p = key.split('-'); return `Правый Б, Ряд ${p[3]}, Место ${p[4]}`; } return key; }
 function getEventSide(zone, row, seatNum) { if (zone.includes('left-balc')) return 'left'; if (zone.includes('right-balc')) return 'right'; if (zone === 'central') { const r = tanci_central[row]; return (r && seatNum >= r[0] && seatNum <= r[1]) ? 'left' : 'right'; } if (zone === 'parterre') { const r = tanci_parterre[row]; return (r && seatNum >= r[0] && seatNum <= r[1]) ? 'left' : 'right'; } return 'left'; }
 function parseRow(str, maxSeat) { const row = []; let seatNum = maxSeat, aisleWidth = 0, djCount = 0; for (let i = 0; i < str.length; i++) { const c = str[i]; if (c === '0') { if (djCount > 0) { row.push({ type: 'dj', width: djCount }); djCount = 0; } if (aisleWidth > 0) { row.push({ type: 'aisle', width: aisleWidth }); aisleWidth = 0; } row.push({ type: 'seat', num: seatNum-- }); } else if (c === '-') { if (djCount > 0) { row.push({ type: 'dj', width: djCount }); djCount = 0; } aisleWidth++; } else if (c === 'д') { if (aisleWidth > 0) { row.push({ type: 'aisle', width: aisleWidth }); aisleWidth = 0; } djCount++; } } if (djCount > 0) row.push({ type: 'dj', width: djCount }); if (aisleWidth > 0) row.push({ type: 'aisle', width: aisleWidth }); return row; }
@@ -651,10 +712,12 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
   const isManual = isAdminMode && document.getElementById('manualBookingCheckbox').checked;
   const phone = document.getElementById('phone').value.trim();
   const rL = document.getElementById('reserveLastname').value.trim(); const rF = document.getElementById('reserveFirstname').value.trim();
+  const lastNameVal = isManual ? document.getElementById('m-lastname').value.trim() : '';
+  const firstNameVal = isManual ? document.getElementById('m-firstname').value.trim() : '';
   
   if (!isManual && phone.replace(/\D/g,'').length < 11) { err.textContent = 'Введите корректный телефон'; return; }
   if (isManual) {
-      if (!document.getElementById('m-lastname').value.trim() || !document.getElementById('m-firstname').value.trim()) {
+      if (!lastNameVal || !firstNameVal) {
           err.textContent = 'Введите фамилию и имя для ручного бронирования'; return;
       }
   }
@@ -669,11 +732,14 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
       payload.ignoreLimit = true; 
       if (isManual) {
           payload.manualBooking = true;
-          payload.manualFirstname = document.getElementById('m-firstname').value.trim();
-          payload.manualLastname = document.getElementById('m-lastname').value.trim();
+          payload.manualFirstname = firstNameVal;
+          payload.manualLastname = lastNameVal;
           payload.manualGroup = document.getElementById('m-group').value.trim();
       }
   }
+
+  const currentSeatsForTicket = [...selected]; 
+  const currentTotalForTicket = document.getElementById('total-price-display').textContent.replace('Итого: ', '');
   
   try {
     const res = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -700,9 +766,51 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
         return; 
     }
     
-    selected.clear(); document.getElementById('modal').hidden = true; loadBookings(); showToast('Успешно забронировано!');
+    selected.clear(); document.getElementById('modal').hidden = true; loadBookings(); 
+
+    // ГЕНЕРАЦИЯ БИЛЕТА
+    let guestName = isManual ? `${lastNameVal} ${firstNameVal}` : `${document.getElementById('userInfoText').innerText.split('\n')[0]}`;
+    if (!guestName || guestName === 'Нет') guestName = 'Гость';
+
+    document.getElementById('t-name').innerText = guestName;
+    
+    let seatsHtml = currentSeatsForTicket.map(k => formatSeatKey(k)).join('<br>');
+    document.getElementById('t-seats').innerHTML = seatsHtml;
+    document.getElementById('t-total').innerText = currentTotalForTicket;
+    
+    document.getElementById('ticketModal').hidden = false;
+
   } catch (err) { err.textContent = 'Ошибка сети'; } finally { btn.disabled = false; btn.textContent = 'Забронировать'; }
 });
+
+// ГЕНЕРАЦИЯ И СКАЧИВАНИЕ КАРТИНКИ БИЛЕТА
+function downloadTicket() {
+    const btn = document.getElementById('downloadTicketBtn');
+    btn.textContent = 'Генерация...';
+    btn.disabled = true;
+
+    const ticketElement = document.getElementById('ticketPreview');
+    
+    html2canvas(ticketElement, {
+        scale: 2, // Высокое качество
+        backgroundColor: "#ffffff",
+        useCORS: true
+    }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = 'ticket.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        
+        btn.textContent = '📥 Скачать билет';
+        btn.disabled = false;
+        showToast('Билет сохранен в загрузки!');
+    }).catch(err => {
+        console.error('Ошибка генерации билета:', err);
+        btn.textContent = '📥 Скачать билет';
+        btn.disabled = false;
+        alert('Не удалось создать картинку. Попробуйте сделать скриншот.');
+    });
+}
 
 function showBigAlert(msg) {
     document.getElementById('bigAlertText').innerHTML = msg;
@@ -719,7 +827,12 @@ async function searchTickets() {
   data.forEach(t => { list.innerHTML += `<div style="padding:8px; border-bottom:1px solid #333;"><b>${formatSeatKey(t.seat_key)}</b></div>`; });
 }
 
-document.getElementById('cancelBtnOpen').addEventListener('click', () => { document.getElementById('myBookingsList').style.display = 'none'; document.getElementById('cancelModal').hidden = false; });
+document.getElementById('cancelBtnOpen').addEventListener('click', () => { 
+    document.getElementById('myBookingsList').style.display = 'none'; 
+    document.getElementById('cancelPhone').value = ''; // ОЧИСТКА ПРИ ОТКРЫТИИ
+    document.getElementById('cancelModal').hidden = false; 
+});
+
 async function findMyBookings() {
   const phone = document.getElementById('cancelPhone').value.trim();
   const res = await fetch(`/api/my-tickets?phone=${encodeURIComponent(phone)}`);
@@ -753,7 +866,14 @@ async function cancelBookings() {
   if (!cancelSeats.size) return;
   const phone = document.getElementById('cancelPhone').value.trim();
   const res = await fetch('/api/cancel', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({seats:[...cancelSeats], phone}) });
-  if (res.ok) { document.getElementById('cancelModal').hidden = true; loadBookings(); showToast('Снято!'); }
+  if (res.ok) { 
+      document.getElementById('cancelModal').hidden = true; 
+      // УДАЛЯЕМ ЗЕЛЕНЫЕ ОБВОДКИ ПОСЛЕ ОТМЕНЫ
+      document.querySelectorAll('.seat.highlighted').forEach(el => el.classList.remove('highlighted'));
+      cancelSeats.clear();
+      loadBookings(); 
+      showToast('Снято!'); 
+  }
   else showToast('Ошибка', 'error');
 }
 
