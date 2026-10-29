@@ -17,7 +17,6 @@
   body::before { content: ""; position: fixed; inset: 0; background: rgba(15, 19, 25, 0.85); z-index: -1; }
   h1{font-size:22px; margin:0 0 4px; font-weight:600; text-align:center}
   
-  /* Обновленный подзаголовок с инфой о событии */
   .sub{color:var(--muted); font-size:13px; margin-bottom:15px; text-align:center; line-height: 1.4; max-width: 600px;}
   .sub b { color: var(--text); }
   
@@ -62,7 +61,6 @@
   details.sidebar-section summary { font-size: 13px; font-weight: bold; color: #fff; cursor: pointer; padding: 8px 0; outline: none; }
   details.sidebar-section .details-content { padding-bottom: 10px; }
   
-  /* Визуальная валидация полей */
   input[type="number"], input[type="text"], input[type="url"], input[type="tel"], select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #2a3446; background: #1f2937; color: #fff; margin-bottom: 10px; transition: border-color 0.3s; }
   input.valid { border-color: #22c55e !important; }
   input.invalid { border-color: #ef4444 !important; }
@@ -82,7 +80,6 @@
   #loadingOverlay { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; justify-content: center; align-items: center; font-size: 18px; color: var(--text); transition: opacity 0.3s; }
   #loadingOverlay.hidden { display: none !important; opacity: 0; pointer-events: none; }
 
-  /* Стили для билета */
   #ticketPreview {
       background: #fff; color: #000; padding: 20px; border-radius: 12px; font-family: 'Segoe UI', Arial, sans-serif; text-align: left;
       position: relative; overflow: hidden; width: 100%; box-sizing: border-box;
@@ -129,7 +126,6 @@
 
 <div class="stage">СЦЕНА</div>
 
-<!-- ЛЕГЕНДА НАВЕРХУ -->
 <div class="legend">
   <span><i class="dot" style="background:linear-gradient(90deg, #FFC000, #92D050, #00B0F0)"></i>свободно</span>
   <span><i class="dot" style="background:#f59e0b"></i>выбрано</span>
@@ -344,6 +340,12 @@
           </div>
           <input id="m-group" type="text" placeholder="Группа" style="margin-bottom:0;">
         </div>
+        
+        <!-- НОВЫЙ ЧЕКБОКС ДЛЯ АДМИНА -->
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; margin-top:15px; color:#60a5fa; border-top: 1px solid #333; padding-top: 10px;">
+          <input type="checkbox" id="adminIgnoreLimit" style="width:18px; height:18px; margin:0;">
+          Не расходовать лимит (Админ-бронь)
+        </label>
       </div>
 
       <label id="phoneBlock" style="display:block; font-size:13px; color:var(--muted); margin-bottom:10px;">Номер телефона
@@ -472,7 +474,6 @@ const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('side') === 'left') forcedSideMode = 'left'; if (urlParams.get('side') === 'right') forcedSideMode = 'right';
 if (forcedSideMode) { currentEvent = forcedSideMode; document.getElementById('eventSwitch').style.display = 'none'; document.getElementById('adminBtn').style.display = 'none'; }
 
-// ФИКС МАСКИ ТЕЛЕФОНА
 function handlePhoneKeydown(e) {
     if (e.key === 'Backspace') {
         const input = e.target;
@@ -807,6 +808,7 @@ document.getElementById('bookBtn').addEventListener('click', () => {
       document.getElementById('manualBookingCheckbox').checked = false;
       document.getElementById('manualFields').style.display = 'none';
       document.getElementById('phoneBlock').style.display = 'block';
+      document.getElementById('adminIgnoreLimit').checked = false; // По умолчанию не игнорируем
   } else {
       document.getElementById('adminManualBlock').style.display = 'none';
   }
@@ -821,6 +823,9 @@ function toggleManualBooking() {
     if (isManual) {
         document.getElementById('phone').value = '';
         document.getElementById('userInfoBox').style.display = 'none';
+        document.getElementById('adminIgnoreLimit').checked = true; // Ручное бронирование всегда игнорирует лимит
+    } else {
+        document.getElementById('adminIgnoreLimit').checked = false;
     }
 }
 
@@ -850,7 +855,8 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
   
   if (isAdminMode) { 
       payload.adminPass = ADMIN_PASSWORD; 
-      payload.ignoreLimit = true; 
+      payload.ignoreLimit = document.getElementById('adminIgnoreLimit').checked; // Читаем состояние чекбокса
+      
       if (isManual) {
           payload.manualBooking = true;
           payload.manualFirstname = firstNameVal;
@@ -934,14 +940,12 @@ function showBigAlert(msg) {
     document.getElementById('bigAlertModal').hidden = false;
 }
 
-// ФУНКЦИЯ ЗАКРЫТИЯ БИЛЕТА (СБРАСЫВАЕТ ПОДСВЕТКУ)
 function closeTicketModal() {
     document.getElementById('ticketModal').hidden = true;
     clearAllSelection(false); 
     showToast('Выделение сброшено');
 }
 
-// МОИ БИЛЕТЫ (С ГЕНЕРАЦИЕЙ БИЛЕТА И ПОДСВЕТКОЙ)
 document.getElementById('myTicketsBtn').addEventListener('click', () => { 
     document.getElementById('myTicketsModal').hidden = false; 
     document.getElementById('ticketsList').innerHTML = ''; 
