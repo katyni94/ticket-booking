@@ -29,6 +29,10 @@
   .col { display: flex; flex-direction: column; align-items: center; }
   .row { display: flex; gap: 4px; justify-content: center; margin-bottom: 4px; min-height: 20px; align-items: center; }
   .row-number { width: 24px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 11px; color: var(--muted); font-weight: 600; flex-shrink: 0; }
+  
+  /* Стили для правого номера ряда */
+  .row-number.right { justify-content: flex-start; padding-right: 0; padding-left: 8px; }
+
   .aisle { height: 20px; flex-shrink: 0; }
   .dj-booth, .wall-block { height: 20px; background: #1f2633; border: 1px solid #3b465c; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #aaa; flex-shrink: 0; }
   .wall-block { border-style: dashed; background: #151b24; }
@@ -91,6 +95,7 @@
     body.admin-mode .hall-wrap { display: none; }
     .seat { width: 16px; height: 16px; font-size: 8px; }
     .row-number { width: 18px; padding-right: 4px; font-size: 9px; }
+    .row-number.right { padding-left: 4px; }
     .bar { flex-direction: column; padding: 10px; }
     .modal { align-items: flex-end; padding: 0; }
     .modal-card { border-radius: 20px 20px 0 0; max-height: 85vh; padding-bottom: 40px; }
@@ -114,7 +119,7 @@
 
 <div class="stage">СЦЕНА</div>
 
-<!-- ЛЕГЕНДА ПЕРЕНЕСЕНА НАВЕРХ -->
+<!-- ЛЕГЕНДА НАВЕРХУ -->
 <div class="legend">
   <span><i class="dot" style="background:linear-gradient(90deg, #FFC000, #92D050, #00B0F0)"></i>свободно</span>
   <span><i class="dot" style="background:#f59e0b"></i>выбрано</span>
@@ -166,7 +171,6 @@
     <div class="details-content">
       <label>Левая часть</label><div id="stats-left" style="font-size:12px; margin-bottom:10px;"></div>
       <label>Правая часть</label><div id="stats-right" style="font-size:12px;"></div>
-      <!-- Кнопка дублей убрана -->
     </div>
   </details>
 
@@ -182,7 +186,7 @@
       <label>Добавить вручную:</label>
       <input type="text" id="u-lastname" placeholder="Фамилия">
       <input type="text" id="u-firstname" placeholder="Имя">
-      <input type="tel" id="u-phone" placeholder="Телефон" oninput="formatPhone(this)">
+      <input type="tel" id="u-phone" placeholder="Телефон" onkeydown="handlePhoneKeydown(event)" oninput="formatPhone(this)">
       <input type="text" id="u-group" placeholder="Группа (обязательно)">
       <button class="btn primary" style="width:100%; background:#3b82f6;" onclick="addUser()">Добавить / Обновить</button>
     </div>
@@ -223,10 +227,10 @@
   <details class="sidebar-section">
     <summary>Массовое редактирование</summary>
     <div class="details-content">
-        <label>Старый телефон <input type="tel" id="bulk-old-phone" oninput="formatPhone(this)"></label>
+        <label>Старый телефон <input type="tel" id="bulk-old-phone" onkeydown="handlePhoneKeydown(event)" oninput="formatPhone(this)"></label>
         <label>Новая фамилия <input type="text" id="bulk-new-lastname"></label>
         <label>Новое имя <input type="text" id="bulk-new-firstname"></label>
-        <label>Новый телефон <input type="tel" id="bulk-new-phone" oninput="formatPhone(this)"></label>
+        <label>Новый телефон <input type="tel" id="bulk-new-phone" onkeydown="handlePhoneKeydown(event)" oninput="formatPhone(this)"></label>
         <button class="btn primary" style="width:100%; background:#eab308;" onclick="bulkEdit()">Применить ко всем</button>
     </div>
   </details>
@@ -285,8 +289,8 @@
 <!-- МОДАЛКА БИЛЕТА -->
 <div class="modal" id="ticketModal" hidden>
   <div class="modal-card">
-    <h2 style="margin-top:0; text-align:center; color:#22c55e;">Билет успешно забронирован!</h2>
-    <p style="text-align:center; color:var(--muted); font-size:13px; margin-bottom:20px;">Сохраните его или сделайте скриншот.</p>
+    <h2 id="ticketTitle" style="margin-top:0; text-align:center; color:#22c55e;">Билет успешно забронирован!</h2>
+    <p id="ticketSubtitle" style="text-align:center; color:var(--muted); font-size:13px; margin-bottom:20px;">Сохраните его или сделайте скриншот.</p>
     
     <div id="ticketPreview">
         <h2>Грандиозное танцевальное шоу "Живи ярче, танцуй! Нам 15 лет!"</h2>
@@ -305,7 +309,7 @@
     </div>
 
     <div style="display:flex; gap:10px; margin-top:20px;">
-        <button class="btn ghost" style="flex:1" onclick="document.getElementById('ticketModal').hidden = true">Закрыть</button>
+        <button class="btn ghost" style="flex:1" onclick="closeTicketModal()">Закрыть</button>
         <button class="btn primary" id="downloadTicketBtn" style="flex:1; background:#22c55e;" onclick="downloadTicket()">📥 Скачать билет</button>
     </div>
   </div>
@@ -362,7 +366,7 @@
     <input id="searchPhone" type="tel" placeholder="Введите ваш телефон" style="margin-bottom:15px;" onkeydown="handlePhoneKeydown(event)" oninput="formatPhone(this)">
     <button class="btn primary" style="width:100%; margin-bottom:15px;" onclick="searchTickets()">Найти</button>
     <div id="ticketsList" style="font-size:13px; margin-bottom:15px;"></div>
-    <button class="btn ghost" style="width:100%;" onclick="document.getElementById('myTicketsModal').hidden = true; clearAllSelection();">Закрыть</button>
+    <button class="btn ghost" style="width:100%;" onclick="document.getElementById('myTicketsModal').hidden = true; clearAllSelection(false);">Закрыть</button>
   </div>
 </div>
 
@@ -379,7 +383,7 @@
       <div id="seatsToCancel" style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:15px;"></div>
       <button class="btn primary" style="width:100%; background:#ef4444;" onclick="cancelBookings()">Подтвердить снятие</button>
     </div>
-    <button class="btn ghost" style="width:100%; margin-top:15px;" onclick="document.getElementById('cancelModal').hidden = true; clearAllSelection();">Закрыть</button>
+    <button class="btn ghost" style="width:100%; margin-top:15px;" onclick="document.getElementById('cancelModal').hidden = true; clearAllSelection(false);">Закрыть</button>
   </div>
 </div>
 
@@ -458,19 +462,17 @@ const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('side') === 'left') forcedSideMode = 'left'; if (urlParams.get('side') === 'right') forcedSideMode = 'right';
 if (forcedSideMode) { currentEvent = forcedSideMode; document.getElementById('eventSwitch').style.display = 'none'; document.getElementById('adminBtn').style.display = 'none'; }
 
-// ФИКС МАСКИ ТЕЛЕФОНА ДЛЯ МОБИЛЬНЫХ
+// ФИКС МАСКИ ТЕЛЕФОНА
 function handlePhoneKeydown(e) {
     if (e.key === 'Backspace') {
         const input = e.target;
         const val = input.value;
         const start = input.selectionStart;
         const end = input.selectionEnd;
-        // Если курсор стоит сразу после скобки, пробела или тире
         if (start === end && start > 0) {
             const charBefore = val[start - 1];
             if (/\D/.test(charBefore) && charBefore !== '+') {
                 e.preventDefault();
-                // Удаляем символ форматирования И цифру перед ним
                 input.value = val.slice(0, start - 2) + val.slice(start);
                 formatPhone(input);
                 input.setSelectionRange(start - 2, start - 2);
@@ -531,7 +533,9 @@ function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isPart
   gridData.forEach((rowData, rowIndex) => {
     const rowNum = rowIndex + 1; const rowDiv = document.createElement('div'); rowDiv.className = 'row';
     if (prefix === 'parterre' && rowNum === 21) rowDiv.style.marginBottom = '30px';
+    
     const rl = document.createElement('div'); rl.className = 'row-number'; rl.textContent = rowNum; rowDiv.appendChild(rl);
+    
     rowData.forEach(item => {
       if (isParterre) {
         if (item.type === 'aisle') { const a = document.createElement('div'); if (prefix === 'central' && item.width === 4) { a.className = 'wall-block'; a.style.width = `${item.width * 24}px`; } else { a.className = 'aisle'; a.style.width = `${item.width * (prefix === 'central' ? 12 : 4.5)}px`; } rowDiv.appendChild(a); }
@@ -542,6 +546,10 @@ function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isPart
         else { let side = defaultSide || getEventSide(prefix, rowNum, item.num); const { price, color } = getPriceAndColor('balcon', side, rowNum, item.num); rowDiv.appendChild(createSeat(`${prefix}-${rowNum}-${item.num}`, item.num, color, price, side, zoneName, rowNum)); }
       }
     });
+
+    // Добавляем номер ряда справа
+    const rlRight = document.createElement('div'); rlRight.className = 'row-number right'; rlRight.textContent = rowNum; rowDiv.appendChild(rlRight);
+
     container.appendChild(rowDiv);
   });
 }
@@ -604,6 +612,7 @@ function updateBar() {
 }
 function clearAllSelection(showMsg = false) { 
     selected.clear(); 
+    document.querySelectorAll('.seat.highlighted').forEach(el => el.classList.remove('highlighted'));
     render(); 
     if (showMsg) showToast('Сброшено'); 
 }
@@ -654,7 +663,6 @@ async function loadSettings() {
       priceSettings = await res.json(); 
       CURRENT_MAX_SEATS = priceSettings.maxSeats || 4; 
       
-      // Инициализация фона
       if (priceSettings.bgUrl) {
           document.documentElement.style.setProperty('--bg-image', `url('${priceSettings.bgUrl}')`);
           document.getElementById('set-bg-url').value = priceSettings.bgUrl;
@@ -863,6 +871,8 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
     let guestName = isManual ? `${lastNameVal} ${firstNameVal}` : `${document.getElementById('userInfoText').innerText.split('\n')[0]}`;
     if (!guestName || guestName === 'Нет') guestName = 'Гость';
 
+    document.getElementById('ticketTitle').innerText = "Билет успешно забронирован!";
+    document.getElementById('ticketSubtitle').innerText = "Сохраните его или сделайте скриншот.";
     document.getElementById('t-name').innerText = guestName;
     
     let seatsHtml = currentSeatsForTicket.map(k => formatSeatKey(k)).join('<br>');
@@ -905,11 +915,18 @@ function showBigAlert(msg) {
     document.getElementById('bigAlertModal').hidden = false;
 }
 
+// ФУНКЦИЯ ЗАКРЫТИЯ БИЛЕТА (СБРАСЫВАЕТ ПОДСВЕТКУ)
+function closeTicketModal() {
+    document.getElementById('ticketModal').hidden = true;
+    clearAllSelection(false); // Сбрасываем подсветку
+}
+
+// МОИ БИЛЕТЫ (С ГЕНЕРАЦИЕЙ БИЛЕТА И ПОДСВЕТКОЙ)
 document.getElementById('myTicketsBtn').addEventListener('click', () => { 
     document.getElementById('myTicketsModal').hidden = false; 
     document.getElementById('ticketsList').innerHTML = ''; 
     document.getElementById('searchPhone').value = '';
-    clearAllSelection(false); // Сбрасываем БЕЗ уведомления
+    clearAllSelection(false); 
 });
 
 async function searchTickets() {
@@ -918,16 +935,32 @@ async function searchTickets() {
   if (!res.ok) return showToast('Не найдено', 'error');
   const data = await res.json();
   
-  const list = document.getElementById('ticketsList'); 
-  list.innerHTML = data.length === 0 ? '<p>Билеты не найдены.</p>' : '';
-  
+  if (!data || data.length === 0) return showToast('Билеты не найдены', 'error');
+
+  // Сначала убираем старую подсветку
   document.querySelectorAll('.seat.highlighted').forEach(el => el.classList.remove('highlighted'));
+  let seatsForTicket = [];
+  let totalPrice = 0;
 
   data.forEach(t => { 
-      list.innerHTML += `<div style="padding:8px; border-bottom:1px solid #333;"><b>${formatSeatKey(t.seat_key)}</b></div>`; 
       const seatBtn = document.querySelector(`.seat[data-key="${t.seat_key}"]`);
-      if (seatBtn) seatBtn.classList.add('highlighted');
+      if (seatBtn) {
+          seatBtn.classList.add('highlighted'); // ПОДСВЕЧИВАЕМ МЕСТО
+          seatsForTicket.push(formatSeatKey(t.seat_key));
+          totalPrice += Number(seatBtn.dataset.price) || 0;
+      }
   });
+
+  // Прячем окно списка, показываем красивый билет
+  document.getElementById('myTicketsModal').hidden = true;
+  
+  document.getElementById('ticketTitle').innerText = "Ваши билеты";
+  document.getElementById('ticketSubtitle').innerText = "Показываем ваши забронированные места.";
+  document.getElementById('t-name').innerText = `${data[0].lastname} ${data[0].firstname}`;
+  document.getElementById('t-seats').innerHTML = seatsForTicket.join('<br>');
+  document.getElementById('t-total').innerText = totalPrice + ' ₽';
+  
+  document.getElementById('ticketModal').hidden = false;
 }
 
 document.getElementById('cancelBtnOpen').addEventListener('click', () => { 
