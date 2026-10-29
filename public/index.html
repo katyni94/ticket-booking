@@ -7,7 +7,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Бронирование мест - Концертный зал</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<!-- Библиотека для создания картинок -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   :root { color-scheme: dark; --bg:#0f1319; --panel:#171d27; --seat-default:#2a3342; --seat-hover:#3a475c; --accent:#3b82f6; --selected:#f59e0b; --booked:#5a2a36; --blocked:#000; --text:#e6ebf2; --muted:#8b97a8; --bg-image: none; --bg-size: cover; --bg-pos: 50% 50%; }
@@ -75,14 +74,14 @@
 
   /* Стили для билета */
   #ticketPreview {
-      background: #fff; color: #000; padding: 30px; border-radius: 12px; font-family: 'Segoe UI', Arial, sans-serif; text-align: left;
+      background: #fff; color: #000; padding: 20px; border-radius: 12px; font-family: 'Segoe UI', Arial, sans-serif; text-align: left;
       position: relative; overflow: hidden; width: 100%; box-sizing: border-box;
   }
-  #ticketPreview h2 { margin: 0 0 10px; font-size: 24px; color: #1a1a1a; }
-  #ticketPreview .ticket-info { font-size: 14px; color: #555; margin-bottom: 20px; line-height: 1.5; }
-  #ticketPreview .ticket-seats { background: #f0f4f8; padding: 15px; border-radius: 8px; font-size: 15px; font-weight: bold; color: #333; line-height: 1.6; border-left: 4px solid #3b82f6; }
-  #ticketPreview .ticket-footer { margin-top: 20px; border-top: 2px dashed #ccc; padding-top: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 16px;}
-  #ticketPreview .barcode { width: 100%; height: 40px; background: repeating-linear-gradient(to right, #000, #000 2px, #fff 2px, #fff 4px, #000 4px, #000 6px, #fff 6px, #fff 10px); margin-top: 15px; opacity: 0.8; }
+  #ticketPreview h2 { margin: 0 0 10px; font-size: 18px; color: #1a1a1a; }
+  #ticketPreview .ticket-info { font-size: 13px; color: #555; margin-bottom: 15px; line-height: 1.5; }
+  #ticketPreview .ticket-seats { background: #f0f4f8; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: bold; color: #333; line-height: 1.5; border-left: 4px solid #3b82f6; }
+  #ticketPreview .ticket-footer { margin-top: 15px; border-top: 2px dashed #ccc; padding-top: 10px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 15px;}
+  #ticketPreview .barcode { width: 100%; height: 35px; background: repeating-linear-gradient(to right, #000, #000 2px, #fff 2px, #fff 4px, #000 4px, #000 6px, #fff 6px, #fff 10px); margin-top: 10px; opacity: 0.8; }
 
   @media (max-width: 768px) {
     body { padding: 10px 5px 300px; }
@@ -96,8 +95,8 @@
     .modal { align-items: flex-end; padding: 0; }
     .modal-card { border-radius: 20px 20px 0 0; max-height: 85vh; padding-bottom: 40px; }
     #closeSidebarBtn { display: block !important; }
-    #ticketPreview { padding: 20px; }
-    #ticketPreview h2 { font-size: 20px; }
+    #ticketPreview { padding: 15px; }
+    #ticketPreview h2 { font-size: 16px; }
   }
 </style>
 </head>
@@ -272,15 +271,13 @@
     <h2 style="margin-top:0; text-align:center; color:#22c55e;">Билет успешно забронирован!</h2>
     <p style="text-align:center; color:var(--muted); font-size:13px; margin-bottom:20px;">Сохраните его или сделайте скриншот.</p>
     
-    <!-- Сам билет (этот блок будет сохраняться как картинка) -->
     <div id="ticketPreview">
-        <h2>Концертный зал</h2>
+        <h2>Грандиозное танцевальное шоу "Живи ярче, танцуй! Нам 15 лет!"</h2>
         <div class="ticket-info">
-            <b>Мероприятие:</b> Танцы без возраста<br>
             <b>Дата и время:</b> 25 ноября, 19:00<br>
             <b>Адрес:</b> ул. Ленина, 27а (Омская филармония)
         </div>
-        <div style="margin-bottom:10px; font-size:14px;"><b>Владелец:</b> <span id="t-name"></span></div>
+        <div style="margin-bottom:8px; font-size:13px;"><b>Владелец:</b> <span id="t-name"></span></div>
         <div class="ticket-seats" id="t-seats"></div>
         
         <div class="ticket-footer">
@@ -319,7 +316,7 @@
       </div>
 
       <label id="phoneBlock" style="display:block; font-size:13px; color:var(--muted); margin-bottom:10px;">Номер телефона
-        <input id="phone" type="tel" placeholder="+7 (999) 123-45-67" style="margin-top:5px;" oninput="formatPhone(this)" onchange="checkPhone()">
+        <input id="phone" type="tel" placeholder="+7 (999) 123-45-67" style="margin-top:5px;" oninput="formatPhone(this); autoCheckPhone(this)" onchange="checkPhone()">
       </label>
       
       <div id="userInfoBox" style="display:none; background:#1f2937; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #3b82f6;">
@@ -328,9 +325,10 @@
       <div id="reserveBox" style="background:#1f2937; padding:10px; border-radius:8px; margin-bottom:15px;">
         <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Использовать чей-то резерв (Введите ФИО)</label>
         <div style="display:flex; gap:10px;">
-          <input id="reserveLastname" type="text" placeholder="Фамилия" style="flex:1; margin:0;">
-          <input id="reserveFirstname" type="text" placeholder="Имя" style="flex:1; margin:0;">
+          <input id="reserveLastname" type="text" placeholder="Фамилия" style="flex:1; margin:0;" oninput="checkReserve()">
+          <input id="reserveFirstname" type="text" placeholder="Имя" style="flex:1; margin:0;" oninput="checkReserve()">
         </div>
+        <div id="reserveInfo" style="font-size:11px; margin-top:5px;"></div>
       </div>
       <div style="display:flex; gap:10px; margin-top:20px;">
         <button type="button" class="btn ghost" style="flex:1" onclick="document.getElementById('modal').hidden = true">Отмена</button>
@@ -347,14 +345,13 @@
     <input id="searchPhone" type="tel" placeholder="Введите ваш телефон" style="margin-bottom:15px;" oninput="formatPhone(this)">
     <button class="btn primary" style="width:100%; margin-bottom:15px;" onclick="searchTickets()">Найти</button>
     <div id="ticketsList" style="font-size:13px; margin-bottom:15px;"></div>
-    <button class="btn ghost" style="width:100%;" onclick="document.getElementById('myTicketsModal').hidden = true">Закрыть</button>
+    <button class="btn ghost" style="width:100%;" onclick="document.getElementById('myTicketsModal').hidden = true; clearAllSelection();">Закрыть</button>
   </div>
 </div>
 
 <div class="modal" id="cancelModal" hidden>
   <div class="modal-card">
     <h2 style="margin-top:0;">Снять бронь</h2>
-    <!-- ПОФИКШЕН ID И ОЧИСТКА ПРИ ОТКРЫТИИ -->
     <input id="cancelPhone" type="tel" placeholder="Введите ваш телефон" style="margin-bottom:10px;" oninput="formatPhone(this)">
     <button class="btn primary" style="width:100%; margin-bottom:15px;" onclick="findMyBookings()">Найти мои места</button>
     <div id="myBookingsList" style="display:none;">
@@ -365,7 +362,7 @@
       <div id="seatsToCancel" style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:15px;"></div>
       <button class="btn primary" style="width:100%; background:#ef4444;" onclick="cancelBookings()">Подтвердить снятие</button>
     </div>
-    <button class="btn ghost" style="width:100%; margin-top:15px;" onclick="document.getElementById('cancelModal').hidden = true">Закрыть</button>
+    <button class="btn ghost" style="width:100%; margin-top:15px;" onclick="document.getElementById('cancelModal').hidden = true; clearAllSelection();">Закрыть</button>
   </div>
 </div>
 
@@ -434,6 +431,7 @@ let currentEvent = 'left', CURRENT_MAX_SEATS = 4, forcedSideMode = null;
 let bookedSet = new Set(), selected = new Set(), cancelSeats = new Set();
 let isAdminMode = false, adminActionMode = 'block', currentForceCancelKey = null;
 let priceSettings = {}, activePaint = null, paintStart = null, allUsers = [];
+let checkPhoneTimeout = null;
 
 const parterreStrings = ["-000000000--000000000000000000000--000000000-","--00000000--000000000000000000000--00000000--","--00000000--000000000000000000000--00000000--","--00000000---00000000000000000000--0000000---","-------------00000000000000000000-----------","---00000000--0000000000000000000---00000000--","-----000000--0000000000000000000---000000----","----0000000--0000000000000000000---0000000----","----0000000--000000000000000000----0000000----","-----000000--000000000000000000---000000-----","-----000000--000000000000000000---000000-----","-----000000---00000000000000000---000000-----","-----000000---00000000000000000---000000-----","-----000000---00000000000000000---000000-----","-----000000---00000000000000000---000000-----","------000000---0000000000000000---000000-----","------000000---0000000000000000---000000-----","------000000---0000000000000000--00000-------","-------00000---0000дддддд00000---00000-------","-------00000---0000дддддд00000---00000-------","-------00000---0000дддддд00000---00000-------","------000000000000000000000000000000---------","-----------00000000000000000000----","------------00000000000000000------","-----------0000000000000000000----"];
 const parterreMaxSeats = [39, 37, 37, 35, 20, 35, 31, 33, 32, 30, 30, 29, 29, 29, 29, 28, 28, 27, 19, 19, 19, 30, 20, 17, 19];
@@ -454,16 +452,24 @@ if (forcedSideMode) { currentEvent = forcedSideMode; document.getElementById('ev
 // ПОФИКШЕННЫЙ ФОРМАТТЕР ТЕЛЕФОНА
 function formatPhone(input) {
     let digits = input.value.replace(/\D/g, '');
-    if (digits === '7' || digits === '') { input.value = ''; return; }
     if (digits.startsWith('8')) digits = '7' + digits.slice(1);
-    if (!digits.startsWith('7') && digits.length > 0) digits = '7' + digits;
     if (digits.length > 11) digits = digits.slice(0, 11);
+    if (digits.length === 0) { input.value = ''; return; }
+    if (!digits.startsWith('7')) digits = '7' + digits;
+    
     let f = '+7';
     if (digits.length > 1) f += ' (' + digits.slice(1, 4);
     if (digits.length >= 4) f += ') ' + digits.slice(4, 7);
     if (digits.length >= 7) f += '-' + digits.slice(7, 9);
     if (digits.length >= 9) f += '-' + digits.slice(9, 11);
     input.value = f;
+}
+
+function autoCheckPhone(input) {
+    if (input.value.replace(/\D/g,'').length === 11) {
+        clearTimeout(checkPhoneTimeout);
+        checkPhoneTimeout = setTimeout(() => { checkPhone(); }, 500);
+    }
 }
 
 function formatSeatKey(key) { if (!key) return ''; if (key.startsWith('parterre-')) { const p = key.split('-'); return `Партер, Ряд ${p[1]}, Место ${p[2]}`; } if (key.startsWith('central-')) { const p = key.split('-'); return `Центр. балкон, Ряд ${p[1]}, Место ${p[2]}`; } if (key.startsWith('balc-left-a-')) { const p = key.split('-'); return `Левый А, Ряд ${p[3]}, Место ${p[4]}`; } if (key.startsWith('balc-left-b-')) { const p = key.split('-'); return `Левый Б, Ряд ${p[3]}, Место ${p[4]}`; } if (key.startsWith('balc-right-a-')) { const p = key.split('-'); return `Правый А, Ряд ${p[3]}, Место ${p[4]}`; } if (key.startsWith('balc-right-b-')) { const p = key.split('-'); return `Правый Б, Ряд ${p[3]}, Место ${p[4]}`; } return key; }
@@ -598,7 +604,26 @@ function renderGroupRestrictions() {
 async function fetchWithRetry(url, options, retries = 3, delay = 2000) { for (let i = 0; i < retries; i++) { try { const res = await fetch(url, options); if (res.ok) return res; if (res.status >= 400 && res.status < 500) return res; } catch (e) {} await new Promise(r => setTimeout(r, delay)); } throw new Error('Сетевая ошибка'); }
 
 async function loadSettings() {
-  try { const res = await fetchWithRetry('/api/settings'); priceSettings = await res.json(); CURRENT_MAX_SEATS = priceSettings.maxSeats || 4; if (priceSettings.bgUrl) document.documentElement.style.setProperty('--bg-image', `url('${priceSettings.bgUrl}')`); render(); } 
+  try { 
+      const res = await fetchWithRetry('/api/settings'); 
+      priceSettings = await res.json(); 
+      CURRENT_MAX_SEATS = priceSettings.maxSeats || 4; 
+      if (priceSettings.bgUrl) {
+          document.documentElement.style.setProperty('--bg-image', `url('${priceSettings.bgUrl}')`);
+          document.getElementById('set-bg-url').value = priceSettings.bgUrl;
+      }
+      if (priceSettings.bgSize) {
+          const s = parseInt(priceSettings.bgSize.replace('%','')) || 100;
+          document.getElementById('bg-size-slider').value = s;
+          document.documentElement.style.setProperty('--bg-size', priceSettings.bgSize);
+      }
+      if (priceSettings.bgPosX !== undefined && priceSettings.bgPosY !== undefined) {
+          document.documentElement.style.setProperty('--bg-pos', `${priceSettings.bgPosX}% ${priceSettings.bgPosY}%`);
+          document.getElementById('bg-x-slider').value = priceSettings.bgPosX;
+          document.getElementById('bg-y-slider').value = priceSettings.bgPosY;
+      }
+      render(); 
+  } 
   catch (e) { console.error('Ошибка настроек:', e); render(); } 
   finally { document.getElementById('loadingOverlay').classList.add('hidden'); }
 }
@@ -610,6 +635,9 @@ async function saveSettings() {
   const restrictions = {};
   document.querySelectorAll('.group-res-select').forEach(sel => { restrictions[sel.dataset.group] = sel.value; });
   priceSettings.groupRestrictions = restrictions;
+  priceSettings.bgSize = document.documentElement.style.getPropertyValue('--bg-size') || 'cover';
+  priceSettings.bgPosX = Number(document.getElementById('bg-x-slider').value);
+  priceSettings.bgPosY = Number(document.getElementById('bg-y-slider').value);
 
   await fetch(`/api/admin/settings?pass=${ADMIN_PASSWORD}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(priceSettings) });
   showToast('Настройки сохранены');
@@ -674,12 +702,30 @@ async function checkPhone() {
   } catch(e) { box.style.display = 'none'; }
 }
 
+// АВТО-ПОИСК РЕЗЕРВА
+async function checkReserve() {
+    const ln = document.getElementById('reserveLastname').value.trim();
+    const fn = document.getElementById('reserveFirstname').value.trim();
+    const infoEl = document.getElementById('reserveInfo');
+    if (ln.length < 2 || fn.length < 2) { infoEl.innerHTML = ''; return; }
+    try {
+        const res = await fetch(`/api/check-reserve?firstname=${encodeURIComponent(fn)}&lastname=${encodeURIComponent(ln)}`);
+        const data = await res.json();
+        if (data.found) {
+            infoEl.innerHTML = `<span style="color:#22c55e;">✅ Найден: ${data.user.lastname} ${data.user.firstname} (свободно мест: ${data.left})</span>`;
+        } else {
+            infoEl.innerHTML = `<span style="color:#f87171;">❌ Не найден в базе</span>`;
+        }
+    } catch(e) { infoEl.innerHTML = ''; }
+}
+
 document.getElementById('bookBtn').addEventListener('click', () => {
   if (!selected.size) return;
   document.getElementById('modalSeats').textContent = seatsText(); 
   document.getElementById('error').textContent = ''; 
   document.getElementById('bookingForm').reset(); 
   document.getElementById('userInfoBox').style.display = 'none';
+  document.getElementById('reserveInfo').innerHTML = '';
   
   if (isAdminMode) {
       document.getElementById('adminManualBlock').style.display = 'block';
@@ -748,8 +794,6 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
     if (!res.ok) { 
         if (data.code === 'SEATS_TAKEN') {
             document.getElementById('modal').hidden = true;
-            
-            // ГЛАВНЫЙ ФИКС: Обновляем зал с сервера, чтобы занятые места стали красными и убрались из selected
             await loadBookings(); 
             
             const takenFormatted = (data.takenSeats || []).map(k => formatSeatKey(k)).join(', ');
@@ -768,7 +812,6 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
     
     selected.clear(); document.getElementById('modal').hidden = true; loadBookings(); 
 
-    // ГЕНЕРАЦИЯ БИЛЕТА
     let guestName = isManual ? `${lastNameVal} ${firstNameVal}` : `${document.getElementById('userInfoText').innerText.split('\n')[0]}`;
     if (!guestName || guestName === 'Нет') guestName = 'Гость';
 
@@ -783,7 +826,6 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
   } catch (err) { err.textContent = 'Ошибка сети'; } finally { btn.disabled = false; btn.textContent = 'Забронировать'; }
 });
 
-// ГЕНЕРАЦИЯ И СКАЧИВАНИЕ КАРТИНКИ БИЛЕТА
 function downloadTicket() {
     const btn = document.getElementById('downloadTicketBtn');
     btn.textContent = 'Генерация...';
@@ -792,9 +834,7 @@ function downloadTicket() {
     const ticketElement = document.getElementById('ticketPreview');
     
     html2canvas(ticketElement, {
-        scale: 2, // Высокое качество
-        backgroundColor: "#ffffff",
-        useCORS: true
+        scale: 2, backgroundColor: "#ffffff", useCORS: true
     }).then(canvas => {
         const link = document.createElement('a');
         link.download = 'ticket.png';
@@ -817,20 +857,40 @@ function showBigAlert(msg) {
     document.getElementById('bigAlertModal').hidden = false;
 }
 
-document.getElementById('myTicketsBtn').addEventListener('click', () => { document.getElementById('myTicketsModal').hidden = false; document.getElementById('ticketsList').innerHTML = ''; });
+// МОИ БИЛЕТЫ С ПОДСВЕТКОЙ
+document.getElementById('myTicketsBtn').addEventListener('click', () => { 
+    document.getElementById('myTicketsModal').hidden = false; 
+    document.getElementById('ticketsList').innerHTML = ''; 
+    document.getElementById('searchPhone').value = '';
+    clearAllSelection(); // Сбрасываем предыдущий выбор
+});
+
 async function searchTickets() {
   const phone = document.getElementById('searchPhone').value.trim();
   const res = await fetch(`/api/my-tickets?phone=${encodeURIComponent(phone)}`);
   if (!res.ok) return showToast('Не найдено', 'error');
   const data = await res.json();
-  const list = document.getElementById('ticketsList'); list.innerHTML = data.length === 0 ? '<p>Билеты не найдены.</p>' : '';
-  data.forEach(t => { list.innerHTML += `<div style="padding:8px; border-bottom:1px solid #333;"><b>${formatSeatKey(t.seat_key)}</b></div>`; });
+  
+  const list = document.getElementById('ticketsList'); 
+  list.innerHTML = data.length === 0 ? '<p>Билеты не найдены.</p>' : '';
+  
+  // Сначала убираем старую подсветку
+  document.querySelectorAll('.seat.highlighted').forEach(el => el.classList.remove('highlighted'));
+
+  data.forEach(t => { 
+      list.innerHTML += `<div style="padding:8px; border-bottom:1px solid #333;"><b>${formatSeatKey(t.seat_key)}</b></div>`; 
+      // Добавляем подсветку
+      const seatBtn = document.querySelector(`.seat[data-key="${t.seat_key}"]`);
+      if (seatBtn) seatBtn.classList.add('highlighted');
+  });
 }
 
+// СНЯТИЕ БРОНИ С ПОДСВЕТКОЙ
 document.getElementById('cancelBtnOpen').addEventListener('click', () => { 
     document.getElementById('myBookingsList').style.display = 'none'; 
-    document.getElementById('cancelPhone').value = ''; // ОЧИСТКА ПРИ ОТКРЫТИИ
+    document.getElementById('cancelPhone').value = ''; 
     document.getElementById('cancelModal').hidden = false; 
+    clearAllSelection(); // Сбрасываем при открытии
 });
 
 async function findMyBookings() {
@@ -840,12 +900,21 @@ async function findMyBookings() {
   const data = await res.json();
   if (data.length === 0) return showToast('Не найдено', 'error');
   const c = document.getElementById('seatsToCancel'); c.innerHTML = ''; cancelSeats.clear();
+  
+  document.querySelectorAll('.seat.highlighted').forEach(el => el.classList.remove('highlighted'));
+
   data.forEach(t => {
     const b = document.createElement('button'); b.className = 'btn ghost'; b.textContent = formatSeatKey(t.seat_key);
     b.onclick = () => {
       const seatBtn = document.querySelector(`.seat[data-key="${t.seat_key}"]`);
-      if (cancelSeats.has(t.seat_key)) { cancelSeats.delete(t.seat_key); b.style.background=''; if(seatBtn) seatBtn.classList.remove('highlighted'); }
-      else { cancelSeats.add(t.seat_key); b.style.background='#d9534f'; if(seatBtn) seatBtn.classList.add('highlighted'); }
+      if (cancelSeats.has(t.seat_key)) { 
+          cancelSeats.delete(t.seat_key); b.style.background=''; 
+          if(seatBtn) seatBtn.classList.remove('highlighted'); 
+      }
+      else { 
+          cancelSeats.add(t.seat_key); b.style.background='#d9534f'; 
+          if(seatBtn) seatBtn.classList.add('highlighted'); 
+      }
     };
     c.appendChild(b);
   });
@@ -868,9 +937,11 @@ async function cancelBookings() {
   const res = await fetch('/api/cancel', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({seats:[...cancelSeats], phone}) });
   if (res.ok) { 
       document.getElementById('cancelModal').hidden = true; 
-      // УДАЛЯЕМ ЗЕЛЕНЫЕ ОБВОДКИ ПОСЛЕ ОТМЕНЫ
-      document.querySelectorAll('.seat.highlighted').forEach(el => el.classList.remove('highlighted'));
+      // ПОЛНЫЙ СБРОС ПРИ ОТМЕНЕ
+      selected.clear(); 
       cancelSeats.clear();
+      document.querySelectorAll('.seat.highlighted').forEach(el => el.classList.remove('highlighted'));
+      updateBar(); // Очищает нижний баннер
       loadBookings(); 
       showToast('Снято!'); 
   }
@@ -879,9 +950,30 @@ async function cancelBookings() {
 
 // АДМИН
 document.getElementById('adminBtn').addEventListener('click', () => {
-  if (isAdminMode) document.body.classList.add('admin-mode'); else { const p = prompt('Пароль:'); if (p === ADMIN_PASSWORD) { localStorage.setItem('hall_admin', 'true'); isAdminMode = true; document.body.classList.add('admin-mode'); document.getElementById('adminBtn').style.display = 'none'; loadAdminUsers(); render(); } }
+  if (isAdminMode) {
+    document.body.classList.add('admin-mode');
+    document.getElementById('adminBtn').style.display = 'none';
+    if (window.innerWidth <= 768) document.getElementById('closeSidebarBtn').style.display = 'block';
+  } else { 
+    const p = prompt('Пароль:'); 
+    if (p === ADMIN_PASSWORD) { 
+        localStorage.setItem('hall_admin', 'true'); 
+        isAdminMode = true; 
+        document.body.classList.add('admin-mode'); 
+        document.getElementById('adminBtn').style.display = 'none'; 
+        loadAdminUsers(); 
+        render(); 
+        if (window.innerWidth <= 768) document.getElementById('closeSidebarBtn').style.display = 'block';
+    } 
+  }
 });
 function logoutAdmin() { localStorage.removeItem('hall_admin'); isAdminMode = false; document.body.classList.remove('admin-mode'); document.getElementById('adminBtn').style.display = 'block'; render(); showToast('Вы вышли'); }
+function toggleMobileAdmin() {
+    document.body.classList.remove('admin-mode');
+    document.getElementById('adminBtn').style.display = 'block';
+    showToast('Панель скрыта. Нажмите ⚙ чтобы вернуть.');
+}
+
 async function loadAdminUsers() {
   const res = await fetch(`/api/admin/users?pass=${ADMIN_PASSWORD}`);
   allUsers = await res.json();
