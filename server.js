@@ -122,6 +122,25 @@ app.get('/api/auth/check-phone', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
+// НОВЫЙ ЭНДПОИНТ ДЛЯ ПРОВЕРКИ РЕЗЕРВА
+app.get('/api/check-reserve', async (req, res) => {
+  const { firstname, lastname } = req.query;
+  if (!firstname || !lastname) return res.json({ found: false });
+  try {
+    const { rows } = await pool.query("SELECT * FROM users WHERE LOWER(firstname)=LOWER($1) AND LOWER(lastname)=LOWER($2)", [firstname.trim(), lastname.trim()]);
+    if (rows.length === 0) return res.json({ found: false });
+    
+    const user = rows[0];
+    const { rows: limitRows } = await pool.query(
+      `SELECT COUNT(*) as count FROM bookings WHERE RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = $1 AND status='booked' AND COALESCE(is_admin_booking, false) = false`,
+      [normPhone(user.phone)]
+    );
+    const used = parseInt(limitRows[0].count, 10);
+    const max = appSettings.maxSeats;
+    res.json({ found: true, user, left: Math.max(0, max - used) });
+  } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
+});
+
 app.get('/api/admin/users', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Нет доступа' });
   const { rows } = await pool.query('SELECT * FROM users ORDER BY lastname, firstname');
@@ -376,7 +395,6 @@ app.get('/api/admin/duplicates', async (req, res) => {
   res.json(rows);
 });
 
-// ЭКСПОРТ EXCEL (С ЗОНОЙ В МЕСТАХ)
 app.get('/api/admin/export', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   const sideFilter = req.query.side;
@@ -450,7 +468,7 @@ app.get('/api/admin/export', async (req, res) => {
   } catch (err) { res.status(500).send('Ошибка'); }
 });
 
-// ЭКСПОРТ WORD (ПОФИКШЕНА ТАБЛИЦА И ДОБАВЛЕНЫ ЗОНЫ)
+// ЭКСПОРТ WORD (УМЕНЬШЕНЫ ПОЛЯ)
 app.get('/api/admin/export-word', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   const sideFilter = req.query.side;
@@ -465,11 +483,11 @@ app.get('/api/admin/export-word', async (req, res) => {
     let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
     <head><meta charset="utf-8"><title>Билеты</title>
     <style>
-      body { font-family: Arial, sans-serif; font-size: 11pt; }
+      body { font-family: Arial, sans-serif; font-size: 10pt; }
       table { border-collapse: collapse; width: 100%; margin-bottom: 20px; table-layout: fixed; word-wrap: break-word; }
-      th, td { border: 1px solid #000; padding: 5px; text-align: left; vertical-align: top; }
+      th, td { border: 1px solid #000; padding: 2px 4px; text-align: left; vertical-align: top; }
       th { background-color: #f0f0f0; font-weight: bold; }
-      h1 { font-size: 16pt; }
+      h1 { font-size: 14pt; }
     </style></head><body>`;
 
     html += `<h1>Список проданных билетов</h1>`;
