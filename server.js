@@ -376,7 +376,7 @@ app.get('/api/admin/duplicates', async (req, res) => {
   res.json(rows);
 });
 
-// ЭКСПОРТ EXCEL (С ПЕРЕНОСОМ СТРОК В МЕСТАХ)
+// ЭКСПОРТ EXCEL (С ЗОНОЙ В МЕСТАХ)
 app.get('/api/admin/export', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   const sideFilter = req.query.side;
@@ -414,11 +414,14 @@ app.get('/api/admin/export', async (req, res) => {
       let zoneName = 'Балкон'; let row = 0, seat = 0;
       if (b.seat_key.startsWith('parterre-')) { zoneName = 'Партер'; const p = b.seat_key.split('-'); row = +p[1]; seat = +p[2]; }
       else if (b.seat_key.startsWith('central-')) { zoneName = 'Центр. балкон'; const p = b.seat_key.split('-'); row = +p[1]; seat = +p[2]; }
-      else if (b.seat_key.startsWith('balc-')) { const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; zoneName = b.seat_key.includes('left') ? 'Левый балкон' : 'Правый балкон'; }
+      else if (b.seat_key.startsWith('balc-left-a-')) { zoneName = 'Левый А'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (b.seat_key.startsWith('balc-left-b-')) { zoneName = 'Левый Б'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (b.seat_key.startsWith('balc-right-a-')) { zoneName = 'Правый А'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (b.seat_key.startsWith('balc-right-b-')) { zoneName = 'Правый Б'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
       
       const price = getPrice(b.seat_key);
       const reserveStr = (b.reserve_lastname && b.reserve_firstname) ? `${b.reserve_lastname} ${b.reserve_firstname}` : '';
-      const seatLabel = `Ряд ${row}, Место ${seat}`;
+      const seatLabel = `${zoneName}, Ряд ${row}, Место ${seat}`;
       
       sheet1.addRow({
         zone: zoneName, row: row, seat: seat, lastname: b.lastname, firstname: b.firstname,
@@ -447,7 +450,7 @@ app.get('/api/admin/export', async (req, res) => {
   } catch (err) { res.status(500).send('Ошибка'); }
 });
 
-// ЭКСПОРТ WORD (С ПЕРЕНОСОМ СТРОК В МЕСТАХ)
+// ЭКСПОРТ WORD (ПОФИКШЕНА ТАБЛИЦА И ДОБАВЛЕНЫ ЗОНЫ)
 app.get('/api/admin/export-word', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   const sideFilter = req.query.side;
@@ -462,15 +465,15 @@ app.get('/api/admin/export-word', async (req, res) => {
     let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
     <head><meta charset="utf-8"><title>Билеты</title>
     <style>
-      body { font-family: Arial, sans-serif; font-size: 12pt; }
-      table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+      body { font-family: Arial, sans-serif; font-size: 11pt; }
+      table { border-collapse: collapse; width: 100%; margin-bottom: 20px; table-layout: fixed; word-wrap: break-word; }
       th, td { border: 1px solid #000; padding: 5px; text-align: left; vertical-align: top; }
       th { background-color: #f0f0f0; font-weight: bold; }
       h1 { font-size: 16pt; }
     </style></head><body>`;
 
     html += `<h1>Список проданных билетов</h1>`;
-    html += `<table><tr><th>Зона</th><th>Ряд</th><th>Место</th><th>Фамилия</th><th>Имя</th><th>Телефон</th><th>Резерв</th><th>Группа</th><th>Админ</th><th>Сумма</th></tr>`;
+    html += `<table><tr><th style="width:12%;">Зона</th><th style="width:6%;">Ряд</th><th style="width:6%;">Место</th><th style="width:12%;">Фамилия</th><th style="width:12%;">Имя</th><th style="width:12%;">Телефон</th><th style="width:10%;">Резерв</th><th style="width:10%;">Группа</th><th style="width:10%;">Сумма</th></tr>`;
 
     const summaryMap = {};
 
@@ -478,13 +481,16 @@ app.get('/api/admin/export-word', async (req, res) => {
       let zoneName = 'Балкон'; let row = 0, seat = 0;
       if (b.seat_key.startsWith('parterre-')) { zoneName = 'Партер'; const p = b.seat_key.split('-'); row = +p[1]; seat = +p[2]; }
       else if (b.seat_key.startsWith('central-')) { zoneName = 'Центр. балкон'; const p = b.seat_key.split('-'); row = +p[1]; seat = +p[2]; }
-      else if (b.seat_key.startsWith('balc-')) { const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; zoneName = b.seat_key.includes('left') ? 'Левый балкон' : 'Правый балкон'; }
+      else if (b.seat_key.startsWith('balc-left-a-')) { zoneName = 'Левый А'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (b.seat_key.startsWith('balc-left-b-')) { zoneName = 'Левый Б'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (b.seat_key.startsWith('balc-right-a-')) { zoneName = 'Правый А'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
+      else if (b.seat_key.startsWith('balc-right-b-')) { zoneName = 'Правый Б'; const p = b.seat_key.split('-'); row = +p[3]; seat = +p[4]; }
 
       const price = getPrice(b.seat_key);
       const reserveStr = (b.reserve_lastname && b.reserve_firstname) ? `${b.reserve_lastname} ${b.reserve_firstname}` : '';
-      const seatLabel = `Ряд ${row}, Место ${seat}`;
+      const seatLabel = `${zoneName}, Ряд ${row}, Место ${seat}`;
       
-      html += `<tr><td>${zoneName}</td><td>${row}</td><td>${seat}</td><td>${b.lastname}</td><td>${b.firstname}</td><td>${b.phone}</td><td>${reserveStr}</td><td>${b.group_name || ''}</td><td>${b.is_admin_booking ? 'да' : ''}</td><td>${price} ₽</td></tr>`;
+      html += `<tr><td>${zoneName}</td><td>${row}</td><td>${seat}</td><td>${b.lastname}</td><td>${b.firstname}</td><td>${b.phone}</td><td>${reserveStr}</td><td>${b.group_name || ''}</td><td>${price} ₽</td></tr>`;
 
       const personKey = `${b.lastname}_${b.firstname}_${b.phone}`;
       if (!summaryMap[personKey]) {
@@ -498,7 +504,7 @@ app.get('/api/admin/export-word', async (req, res) => {
     html += `</table>`;
 
     html += `<h1>Сводка по покупателям</h1>`;
-    html += `<table><tr><th>Фамилия</th><th>Имя</th><th>Телефон</th><th>Группа</th><th>Всего мест</th><th>Из них админских</th><th>Места</th><th>Итого сумма</th></tr>`;
+    html += `<table><tr><th style="width:12%;">Фамилия</th><th style="width:12%;">Имя</th><th style="width:14%;">Телефон</th><th style="width:10%;">Группа</th><th style="width:8%;">Всего</th><th style="width:8%;">Админ</th><th style="width:26%;">Места</th><th style="width:10%;">Сумма</th></tr>`;
     Object.values(summaryMap).forEach(p => {
       html += `<tr><td>${p.lastname}</td><td>${p.firstname}</td><td>${p.phone}</td><td>${p.group}</td><td>${p.count}</td><td>${p.adminCount}</td><td>${p.seatsList.join(';<br>')}</td><td>${p.total} ₽</td></tr>`;
     });
