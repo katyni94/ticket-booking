@@ -80,6 +80,36 @@
   #loadingOverlay { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; justify-content: center; align-items: center; font-size: 18px; color: var(--text); transition: opacity 0.3s; }
   #loadingOverlay.hidden { display: none !important; opacity: 0; pointer-events: none; }
 
+  /* Стили для подсказки админа */
+  #seatTooltip {
+      position: fixed;
+      background: rgba(15, 19, 25, 0.95);
+      color: #fff;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid #3b82f6;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      pointer-events: none;
+      z-index: 2000;
+      opacity: 0;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+  }
+  #seatTooltip::after {
+      content: '';
+      position: absolute;
+      bottom: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 6px solid #3b82f6;
+  }
+
   #ticketPreview {
       background: #fff; color: #000; padding: 20px; border-radius: 12px; font-family: 'Segoe UI', Arial, sans-serif; text-align: left;
       position: relative; overflow: hidden; width: 100%; box-sizing: border-box;
@@ -341,7 +371,6 @@
           <input id="m-group" type="text" placeholder="Группа" style="margin-bottom:0;">
         </div>
         
-        <!-- НОВЫЙ ЧЕКБОКС ДЛЯ АДМИНА -->
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; margin-top:15px; color:#60a5fa; border-top: 1px solid #333; padding-top: 10px;">
           <input type="checkbox" id="adminIgnoreLimit" style="width:18px; height:18px; margin:0;">
           Не расходовать лимит (Админ-бронь)
@@ -457,6 +486,9 @@ let bookedSet = new Set(), selected = new Set(), cancelSeats = new Set();
 let isAdminMode = false, adminActionMode = 'block', currentForceCancelKey = null;
 let priceSettings = {}, activePaint = null, paintStart = null, allUsers = [];
 let checkPhoneTimeout = null;
+let bookedInfoMap = {};
+let seatTooltip = null;
+let tooltipHideTimer = null;
 
 const parterreStrings = ["-000000000--000000000000000000000--000000000-","--00000000--000000000000000000000--00000000--","--00000000--000000000000000000000--00000000--","--00000000---00000000000000000000--0000000---","-------------00000000000000000000-----------","---00000000--0000000000000000000---00000000--","-----000000--0000000000000000000---000000----","----0000000--0000000000000000000---0000000----","----0000000--000000000000000000----0000000----","-----000000--000000000000000000---000000-----","-----000000--000000000000000000---000000-----","-----000000---00000000000000000---000000-----","-----000000---00000000000000000---000000-----","-----000000---00000000000000000---000000-----","-----000000---00000000000000000---000000-----","------000000---0000000000000000---000000-----","------000000---0000000000000000---000000-----","------000000---0000000000000000--00000-------","-------00000---0000дддддд00000---00000-------","-------00000---0000дддддд00000---00000-------","-------00000---0000дддддд00000---00000-------","------000000000000000000000000000000---------","-----------00000000000000000000----","------------00000000000000000------","-----------0000000000000000000----"];
 const parterreMaxSeats = [39, 37, 37, 35, 20, 35, 31, 33, 32, 30, 30, 29, 29, 29, 29, 28, 28, 27, 19, 19, 19, 30, 20, 17, 19];
@@ -506,6 +538,13 @@ function formatPhone(input) {
     if (digits.length >= 9) f += '-' + digits.slice(9, 11);
     
     input.value = f;
+    
+    // НОВОЕ: если номер неполный — скрываем плашку
+    if (digits.length < 11) {
+        const box = document.getElementById('userInfoBox');
+        if (box) box.style.display = 'none';
+        input.classList.remove('valid', 'invalid');
+    }
 }
 
 function autoCheckPhone(input) {
@@ -710,7 +749,20 @@ async function saveSettings() {
   showToast('Настройки сохранены');
 }
 async function loadBookings() {
-  try { const res = await fetchWithRetry('/api/bookings', { cache: 'no-store' }); const data = await res.json(); bookedSet.clear(); if (Array.isArray(data)) data.forEach(i => { if (typeof i === 'string') bookedSet.add(i); else { bookedSet.add(i.seat_key); if (i.status === 'blocked') bookedSet.add(i.seat_key + '_blocked'); } }); updateSeatsUI(); } 
+  try { 
+      const res = await fetchWithRetry('/api/bookings', { cache: 'no-store' }); 
+      const data = await res.json(); 
+      bookedSet.clear(); 
+      if (Array.isArray(data)) data.forEach(i => { 
+          if (typeof i === 'string') bookedSet.add(i); 
+          else { bookedSet.add(i.seat_key); if (i.status === 'blocked') bookedSet.add(i.seat_key + '_blocked'); } 
+      }); 
+      updateSeatsUI(); 
+      
+      // НОВОЕ: если мы в админке — подгружаем имена
+      if (isAdminMode) await loadBookingsInfo();
+      
+  } 
   catch (e) { console.error('Ошибка броней:', e); } 
   finally { document.getElementById('loadingOverlay').classList.add('hidden'); }
 }
@@ -773,7 +825,7 @@ async function checkPhone() {
       else { 
           phoneInput.classList.add('invalid');
           box.style.display = 'block'; 
-          txt.innerHTML = '<span style="color:#f87171;">❌ Номер не найден в базе!</span>'; 
+          txt.innerHTML = '<span style="color:#f87171;">❌ Некорректный номер или его нет в базе</span>'; 
       }
   } catch(e) { box.style.display = 'none'; }
 }
@@ -808,7 +860,7 @@ document.getElementById('bookBtn').addEventListener('click', () => {
       document.getElementById('manualBookingCheckbox').checked = false;
       document.getElementById('manualFields').style.display = 'none';
       document.getElementById('phoneBlock').style.display = 'block';
-      document.getElementById('adminIgnoreLimit').checked = false; // По умолчанию не игнорируем
+      document.getElementById('adminIgnoreLimit').checked = false;
   } else {
       document.getElementById('adminManualBlock').style.display = 'none';
   }
@@ -823,7 +875,7 @@ function toggleManualBooking() {
     if (isManual) {
         document.getElementById('phone').value = '';
         document.getElementById('userInfoBox').style.display = 'none';
-        document.getElementById('adminIgnoreLimit').checked = true; // Ручное бронирование всегда игнорирует лимит
+        document.getElementById('adminIgnoreLimit').checked = true;
     } else {
         document.getElementById('adminIgnoreLimit').checked = false;
     }
@@ -855,7 +907,7 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
   
   if (isAdminMode) { 
       payload.adminPass = ADMIN_PASSWORD; 
-      payload.ignoreLimit = document.getElementById('adminIgnoreLimit').checked; // Читаем состояние чекбокса
+      payload.ignoreLimit = document.getElementById('adminIgnoreLimit').checked; 
       
       if (isManual) {
           payload.manualBooking = true;
@@ -919,14 +971,25 @@ function downloadTicket() {
     html2canvas(ticketElement, {
         scale: 2, backgroundColor: "#ffffff", useCORS: true
     }).then(canvas => {
-        const link = document.createElement('a');
-        link.download = 'ticket.png';
-        link.href = canvas.toDataURL('image/png');
-        link.click();
+        const imageData = canvas.toDataURL('image/png');
+        
+        // Открываем изображение в новом окне
+        const newWindow = window.open();
+        if (newWindow) {
+            newWindow.document.write(`
+                <html><head><title>Билет</title></head>
+                <body style="margin:0; display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:100vh; background:#111; font-family:sans-serif;">
+                    <p style="color:#fff; margin-bottom:15px; font-size:16px;">Нажмите и удерживайте изображение, чтобы сохранить</p>
+                    <img src="${imageData}" style="max-width:95%; height:auto; box-shadow: 0 4px 15px rgba(0,0,0,0.5);" />
+                </body></html>
+            `);
+            newWindow.document.close();
+        } else {
+            alert('Не удалось открыть окно. Попробуйте сделать скриншот.');
+        }
         
         btn.textContent = '📥 Скачать билет';
         btn.disabled = false;
-        showToast('Билет сохранен в загрузки!');
     }).catch(err => {
         console.error('Ошибка генерации билета:', err);
         btn.textContent = '📥 Скачать билет';
@@ -945,6 +1008,56 @@ function closeTicketModal() {
     clearAllSelection(false); 
     showToast('Выделение сброшено');
 }
+
+// ПОДСКАЗКА АДМИНА ПРИ НАВЕДЕНИИ
+async function loadBookingsInfo() {
+    if (!isAdminMode) return;
+    try {
+        const res = await fetch(`/api/admin/bookings-names?pass=${ADMIN_PASSWORD}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        bookedInfoMap = {};
+        data.forEach(d => {
+            bookedInfoMap[d.seat_key] = { lastname: d.lastname, firstname: d.firstname };
+        });
+    } catch(e) { /* тихо */ }
+}
+
+document.body.addEventListener('mouseover', (e) => {
+    if (!isAdminMode) return;
+    const btn = e.target.closest('.seat');
+    if (!btn || !btn.classList.contains('booked') || btn.classList.contains('blocked')) return;
+
+    const info = bookedInfoMap[btn.dataset.key];
+    if (!info) return;
+
+    clearTimeout(tooltipHideTimer);
+    
+    if (!seatTooltip) {
+        seatTooltip = document.createElement('div');
+        seatTooltip.id = 'seatTooltip';
+        document.body.appendChild(seatTooltip);
+    }
+    
+    seatTooltip.textContent = `${info.lastname} ${info.firstname}`;
+    
+    const rect = btn.getBoundingClientRect();
+    seatTooltip.style.left = (rect.left + rect.width / 2) + 'px';
+    seatTooltip.style.top = (rect.top - 42) + 'px';
+    seatTooltip.style.transform = 'translateX(-50%)';
+    seatTooltip.style.opacity = '1';
+});
+
+document.body.addEventListener('mouseout', (e) => {
+    if (!seatTooltip) return;
+    const btn = e.target.closest('.seat');
+    if (btn) {
+        clearTimeout(tooltipHideTimer);
+        tooltipHideTimer = setTimeout(() => {
+            seatTooltip.style.opacity = '0';
+        }, 50);
+    }
+});
 
 document.getElementById('myTicketsBtn').addEventListener('click', () => { 
     document.getElementById('myTicketsModal').hidden = false; 
@@ -1071,6 +1184,7 @@ document.getElementById('adminBtn').addEventListener('click', () => {
         document.getElementById('adminBtn').style.display = 'none'; 
         loadAdminUsers(); 
         render(); 
+        loadBookingsInfo(); // НОВОЕ: загружаем имена для подсказок
         if (window.innerWidth <= 768) document.getElementById('closeSidebarBtn').style.display = 'block';
     } 
   }
@@ -1307,6 +1421,7 @@ if (localStorage.getItem('hall_admin') === 'true') {
     document.body.classList.add('admin-mode');
     document.getElementById('adminBtn').style.display = 'none';
     loadAdminUsers();
+    loadBookingsInfo(); // НОВОЕ: загружаем имена для подсказок при автовходе
 }
 
 loadSettings(); loadBookings(); setInterval(loadBookings, POLL_MS);
