@@ -16,7 +16,11 @@
   body.admin-mode { padding-right: 380px; }
   body::before { content: ""; position: fixed; inset: 0; background: rgba(15, 19, 25, 0.85); z-index: -1; }
   h1{font-size:22px; margin:0 0 4px; font-weight:600; text-align:center}
-  .sub{color:var(--muted); font-size:13px; margin-bottom:15px; text-align:center}
+  
+  /* Обновленный подзаголовок с инфой о событии */
+  .sub{color:var(--muted); font-size:13px; margin-bottom:15px; text-align:center; line-height: 1.4; max-width: 600px;}
+  .sub b { color: var(--text); }
+  
   .event-switch { display: flex; gap: 10px; margin-bottom: 20px; background: rgba(23,29,39,0.8); padding: 5px; border-radius: 12px; backdrop-filter: blur(5px); }
   .event-switch button { background: transparent; color: var(--muted); border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 14px; }
   .event-switch button.active { background: var(--accent); color: #fff; }
@@ -29,10 +33,7 @@
   .col { display: flex; flex-direction: column; align-items: center; }
   .row { display: flex; gap: 4px; justify-content: center; margin-bottom: 4px; min-height: 20px; align-items: center; }
   .row-number { width: 24px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 11px; color: var(--muted); font-weight: 600; flex-shrink: 0; }
-  
-  /* Стили для правого номера ряда */
   .row-number.right { justify-content: flex-start; padding-right: 0; padding-left: 8px; }
-
   .aisle { height: 20px; flex-shrink: 0; }
   .dj-booth, .wall-block { height: 20px; background: #1f2633; border: 1px solid #3b465c; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #aaa; flex-shrink: 0; }
   .wall-block { border-style: dashed; background: #151b24; }
@@ -60,7 +61,12 @@
   details.sidebar-section { background: #111721; border-radius: 8px; border: 1px solid #2a3446; padding: 5px 10px; }
   details.sidebar-section summary { font-size: 13px; font-weight: bold; color: #fff; cursor: pointer; padding: 8px 0; outline: none; }
   details.sidebar-section .details-content { padding-bottom: 10px; }
-  input[type="number"], input[type="text"], input[type="url"], input[type="tel"], select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #2a3446; background: #1f2937; color: #fff; margin-bottom: 10px; }
+  
+  /* Визуальная валидация полей */
+  input[type="number"], input[type="text"], input[type="url"], input[type="tel"], select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #2a3446; background: #1f2937; color: #fff; margin-bottom: 10px; transition: border-color 0.3s; }
+  input.valid { border-color: #22c55e !important; }
+  input.invalid { border-color: #ef4444 !important; }
+
   #paintPalette { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 2px solid #eab308; border-radius: 12px; padding: 15px; display: none; z-index: 150; flex-wrap: wrap; justify-content: center; gap: 10px; max-width: 90vw; }
   body.admin-mode #paintPalette { transform: translateX(calc(-50% - 190px)); }
   .palette-item { display: flex; flex-direction: column; align-items: center; cursor: pointer; padding: 5px; border-radius: 8px; border: 2px solid transparent; }
@@ -82,7 +88,8 @@
       position: relative; overflow: hidden; width: 100%; box-sizing: border-box;
   }
   #ticketPreview h2 { margin: 0 0 10px; font-size: 18px; color: #1a1a1a; }
-  #ticketPreview .ticket-info { font-size: 13px; color: #555; margin-bottom: 15px; line-height: 1.5; }
+  #ticketPreview .ticket-info { font-size: 13px; color: #555; margin-bottom: 15px; line-height: 1.6; white-space: pre-wrap; }
+  #ticketPreview .owner-info { margin-bottom: 10px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
   #ticketPreview .ticket-seats { background: #f0f4f8; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: bold; color: #333; line-height: 1.5; border-left: 4px solid #3b82f6; }
   #ticketPreview .ticket-footer { margin-top: 15px; border-top: 2px dashed #ccc; padding-top: 10px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 15px;}
   #ticketPreview .barcode { width: 100%; height: 35px; background: repeating-linear-gradient(to right, #000, #000 2px, #fff 2px, #fff 4px, #000 4px, #000 6px, #fff 6px, #fff 10px); margin-top: 10px; opacity: 0.8; }
@@ -110,7 +117,10 @@
 <div id="loadingOverlay">Загрузка...</div>
 
 <h1>Концертный зал</h1>
-<div class="sub">25 ноября в 19:00</div>
+<div class="sub">
+    <b>Грандиозное шоу "Живи ярче, танцуй!"</b><br>
+    25 ноября в 19:00 | ул. Ленина, 27а (Омская филармония)
+</div>
 
 <div class="event-switch" id="eventSwitch">
   <button id="btn-event-left" class="active" onclick="switchEvent('left')">Танцы без возраста</button>
@@ -298,7 +308,7 @@
             <b>Дата и время:</b> 25 ноября, 19:00<br>
             <b>Адрес:</b> ул. Ленина, 27а (Омская филармония)
         </div>
-        <div style="margin-bottom:8px; font-size:13px;"><b>Владелец:</b> <span id="t-name"></span></div>
+        <div class="owner-info"><b>Владелец:</b> <span id="t-name"></span></div>
         <div class="ticket-seats" id="t-seats"></div>
         
         <div class="ticket-footer">
@@ -547,7 +557,6 @@ function renderGrid(containerId, gridData, prefix, zoneName, defaultSide, isPart
       }
     });
 
-    // Добавляем номер ряда справа
     const rlRight = document.createElement('div'); rlRight.className = 'row-number right'; rlRight.textContent = rowNum; rowDiv.appendChild(rlRight);
 
     container.appendChild(rowDiv);
@@ -736,13 +745,18 @@ document.body.addEventListener('click', async e => {
 });
 
 async function checkPhone() {
-  const phone = document.getElementById('phone').value.trim();
+  const phoneInput = document.getElementById('phone');
+  const phone = phoneInput.value.trim();
   const box = document.getElementById('userInfoBox'); const txt = document.getElementById('userInfoText');
+  
+  phoneInput.classList.remove('valid', 'invalid');
+
   if (phone.replace(/\D/g,'').length < 11) { box.style.display = 'none'; return; }
   
   try {
       const res = await fetch(`/api/auth/check-phone?phone=${encodeURIComponent(phone)}`);
       if (res.ok) { 
+          phoneInput.classList.add('valid');
           const d = await res.json(); 
           box.style.display = 'block'; 
           
@@ -755,7 +769,11 @@ async function checkPhone() {
           
           txt.innerHTML = `<b>${d.user.lastname} ${d.user.firstname}</b><br>Группа: ${d.user.group_name || 'Нет'}${limitText}`; 
       }
-      else { box.style.display = 'block'; txt.innerHTML = '<span style="color:#f87171;">❌ Номер не найден в базе!</span>'; }
+      else { 
+          phoneInput.classList.add('invalid');
+          box.style.display = 'block'; 
+          txt.innerHTML = '<span style="color:#f87171;">❌ Номер не найден в базе!</span>'; 
+      }
   } catch(e) { box.style.display = 'none'; }
 }
 
@@ -782,6 +800,7 @@ document.getElementById('bookBtn').addEventListener('click', () => {
   document.getElementById('bookingForm').reset(); 
   document.getElementById('userInfoBox').style.display = 'none';
   document.getElementById('reserveInfo').innerHTML = '';
+  document.getElementById('phone').classList.remove('valid', 'invalid');
   
   if (isAdminMode) {
       document.getElementById('adminManualBlock').style.display = 'block';
@@ -873,7 +892,7 @@ document.getElementById('bookingForm').addEventListener('submit', async e => {
 
     document.getElementById('ticketTitle').innerText = "Билет успешно забронирован!";
     document.getElementById('ticketSubtitle').innerText = "Сохраните его или сделайте скриншот.";
-    document.getElementById('t-name').innerText = guestName;
+    document.getElementById('t-name').innerHTML = `<b>${guestName}</b>`;
     
     let seatsHtml = currentSeatsForTicket.map(k => formatSeatKey(k)).join('<br>');
     document.getElementById('t-seats').innerHTML = seatsHtml;
@@ -918,7 +937,8 @@ function showBigAlert(msg) {
 // ФУНКЦИЯ ЗАКРЫТИЯ БИЛЕТА (СБРАСЫВАЕТ ПОДСВЕТКУ)
 function closeTicketModal() {
     document.getElementById('ticketModal').hidden = true;
-    clearAllSelection(false); // Сбрасываем подсветку
+    clearAllSelection(false); 
+    showToast('Выделение сброшено');
 }
 
 // МОИ БИЛЕТЫ (С ГЕНЕРАЦИЕЙ БИЛЕТА И ПОДСВЕТКОЙ)
@@ -935,9 +955,13 @@ async function searchTickets() {
   if (!res.ok) return showToast('Не найдено', 'error');
   const data = await res.json();
   
-  if (!data || data.length === 0) return showToast('Билеты не найдены', 'error');
+  if (!data || data.length === 0) {
+      const list = document.getElementById('ticketsList');
+      list.innerHTML = '<div style="text-align:center; color:var(--muted); padding:20px; line-height:1.5;">По вашему номеру билеты не найдены.<br>Проверьте номер или обратитесь к администратору.</div>';
+      document.getElementById('ticketsResult').style.display = 'block';
+      return;
+  }
 
-  // Сначала убираем старую подсветку
   document.querySelectorAll('.seat.highlighted').forEach(el => el.classList.remove('highlighted'));
   let seatsForTicket = [];
   let totalPrice = 0;
@@ -945,18 +969,21 @@ async function searchTickets() {
   data.forEach(t => { 
       const seatBtn = document.querySelector(`.seat[data-key="${t.seat_key}"]`);
       if (seatBtn) {
-          seatBtn.classList.add('highlighted'); // ПОДСВЕЧИВАЕМ МЕСТО
+          seatBtn.classList.add('highlighted');
           seatsForTicket.push(formatSeatKey(t.seat_key));
           totalPrice += Number(seatBtn.dataset.price) || 0;
       }
   });
 
-  // Прячем окно списка, показываем красивый билет
   document.getElementById('myTicketsModal').hidden = true;
   
   document.getElementById('ticketTitle').innerText = "Ваши билеты";
   document.getElementById('ticketSubtitle').innerText = "Показываем ваши забронированные места.";
-  document.getElementById('t-name').innerText = `${data[0].lastname} ${data[0].firstname}`;
+  
+  let nameHtml = `<b>${data[0].lastname} ${data[0].firstname}</b>`;
+  if (data[0].group_name) nameHtml += `<br>Группа: ${data[0].group_name}`;
+  document.getElementById('t-name').innerHTML = nameHtml;
+  
   document.getElementById('t-seats').innerHTML = seatsForTicket.join('<br>');
   document.getElementById('t-total').innerText = totalPrice + ' ₽';
   
@@ -1010,6 +1037,7 @@ function selectAllCancel() {
 }
 async function cancelBookings() {
   if (!cancelSeats.size) return;
+  if (!confirm('Вы уверены, что хотите снять выбранные места?')) return;
   const phone = document.getElementById('cancelPhone').value.trim();
   const res = await fetch('/api/cancel', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({seats:[...cancelSeats], phone}) });
   if (res.ok) { 
