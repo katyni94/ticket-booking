@@ -122,7 +122,6 @@ app.get('/api/auth/check-phone', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Ошибка БД' }); }
 });
 
-// НОВЫЙ ЭНДПОИНТ ДЛЯ ПРОВЕРКИ РЕЗЕРВА
 app.get('/api/check-reserve', async (req, res) => {
   const { firstname, lastname } = req.query;
   if (!firstname || !lastname) return res.json({ found: false });
@@ -468,7 +467,6 @@ app.get('/api/admin/export', async (req, res) => {
   } catch (err) { res.status(500).send('Ошибка'); }
 });
 
-// ЭКСПОРТ WORD (УМЕНЬШЕНЫ ПОЛЯ)
 app.get('/api/admin/export-word', async (req, res) => {
   if (req.query.pass !== ADMIN_PASSWORD) return res.status(401).send('Доступ запрещен');
   const sideFilter = req.query.side;
